@@ -1,0 +1,41 @@
+{
+  "name": "realtime-chat-app",
+  "version": "1.0.0",
+  "description": "Real-Time Chat + Collaboration App with Express, Socket.IO, and Next.js",
+  "main": "server.js",
+  "scripts": {
+    "dev": "NODE_OPTIONS=--openssl-legacy-provider nodemon server.js",
+    "build": "NODE_OPTIONS=--openssl-legacy-provider next build",
+    "start": "NODE_OPTIONS=--openssl-legacy-provider NODE_ENV=production node server.js",
+    "lint": "eslint . --ext .js,.jsx"
+  },
+  "keywords": [
+    "chat",
+    "realtime",
+    "websocket",
+    "collaboration"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.5",
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "helmet": "^4.2.0",
+    "jsonwebtoken": "^8.5.1",
+    "mongoose": "^5.10.15",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.2",
+    "next": "^10.0.0",
+    "react": "^17.0.1",
+    "react-dom": "^17.0.1",
+    "redis": "^3.0.2",
+    "socket.io": "^2.3.0",
+    "socket.io-client": "^2.3.1",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.6"
+  }
+}
