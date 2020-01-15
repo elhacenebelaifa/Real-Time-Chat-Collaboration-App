@@ -101,3 +101,11 @@
 .link a:hover {
   text-decoration: underline;
 }
+
+@media (max-width: 480px) {
+  .card {
+    padding: 1.5rem;
+    margin: 1rem;
+    border-radius: 12px;
+  }
+}

@@ -1,9 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import styles from '../../styles/Chat.module.css';
 
 export default function CreateRoomModal({ onClose, onCreate }) {
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const modalRef = useRef(null);
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    modalRef.current?.focus();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,7 +34,14 @@ export default function CreateRoomModal({ onClose, onCreate }) {
 
   return (
     <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        onClick={(e) => e.stopPropagation()}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+      >
         <h3>Create Group Chat</h3>
         <form onSubmit={handleSubmit}>
           <div className={styles.modalField}>

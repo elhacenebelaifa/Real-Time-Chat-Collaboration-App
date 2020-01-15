@@ -1,4 +1,5 @@
 import styles from '../../styles/Chat.module.css';
+import AuthImage from './AuthImage';
 
 function formatTime(dateStr) {
   const date = new Date(dateStr);
@@ -9,15 +10,16 @@ function isImageFile(mimeType) {
   return mimeType && mimeType.startsWith('image/');
 }
 
-export default function MessageItem({ message }) {
+export default function MessageItem({ message, currentUserId }) {
   const sender = message.sender;
   const initial = (sender?.displayName || sender?.username || '?').charAt(0).toUpperCase();
+  const isOwn = sender?._id === currentUserId;
 
   return (
-    <div className={styles.messageGroup}>
-      <div className={styles.messageAvatar}>{initial}</div>
-      <div className={styles.messageContent}>
-        <div className={styles.messageMeta}>
+    <div className={isOwn ? styles.messageGroupOwn : styles.messageGroup}>
+      {!isOwn && <div className={styles.messageAvatar}>{initial}</div>}
+      <div className={isOwn ? styles.messageContentOwn : styles.messageContentOther}>
+        <div className={isOwn ? styles.messageMetaOwn : styles.messageMeta}>
           <span className={styles.messageSender}>
             {sender?.displayName || sender?.username || 'Unknown'}
           </span>
@@ -28,7 +30,7 @@ export default function MessageItem({ message }) {
         {message.type === 'file' && message.fileAttachment ? (
           <div className={styles.messageFile}>
             {isImageFile(message.fileAttachment.mimeType) ? (
-              <img
+              <AuthImage
                 src={message.fileAttachment.url}
                 alt={message.fileAttachment.fileName}
                 className={styles.messageImage}

@@ -22,6 +22,7 @@ export default function ChatRoom() {
   const [messages, setMessages] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const typingTimeoutRef = useRef(null);
   const prevRoomRef = useRef(null);
 
@@ -131,6 +132,7 @@ export default function ChatRoom() {
   };
 
   const handleSelectRoom = (id) => {
+    setSidebarOpen(false);
     router.push(`/chat/${id}`);
   };
 
@@ -169,7 +171,7 @@ export default function ChatRoom() {
   };
 
   if (loading || !user) {
-    return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>Loading...</div>;
+    return <div className={styles.loadingScreen}>Loading...</div>;
   }
 
   const isDM = activeRoom?.type === 'dm';
@@ -188,12 +190,18 @@ export default function ChatRoom() {
 
       {!connected && <div className={styles.reconnecting}>Reconnecting...</div>}
 
+      {/* Sidebar overlay for mobile */}
+      <div
+        className={`${styles.sidebarOverlay} ${sidebarOpen ? styles.sidebarOverlayVisible : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Sidebar */}
-      <div className={styles.sidebar}>
+      <div className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
         <div className={styles.sidebarHeader}>
           <h2>Chats</h2>
           <div className={styles.sidebarActions}>
-            <button className={styles.iconButton} onClick={() => setShowCreateModal(true)} title="New Group">
+            <button className={styles.iconButton} onClick={() => setShowCreateModal(true)} title="New Group" aria-label="Create new group chat">
               +
             </button>
           </div>
@@ -222,6 +230,13 @@ export default function ChatRoom() {
       {/* Main Panel */}
       <div className={styles.mainPanel}>
         <div className={styles.chatHeader}>
+          <button
+            className={styles.hamburgerButton}
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open sidebar"
+          >
+            ☰
+          </button>
           <div className={styles.chatHeaderInfo}>
             <h3>{roomDisplayName}</h3>
             {!isDM && activeRoom && (
