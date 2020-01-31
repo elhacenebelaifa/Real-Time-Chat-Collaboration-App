@@ -16,8 +16,6 @@ A full-stack real-time chat application built with Express, Socket.IO, and Next.
 
 ## Tech Stack
 
-All libraries have releases from 2020 or earlier.
-
 | Layer | Technology | Version |
 |---|---|---|
 | Frontend | Next.js (Pages Router) | 10.x |
@@ -31,7 +29,7 @@ All libraries have releases from 2020 or earlier.
 
 ## Prerequisites
 
-- Node.js (v14–v18 recommended; v20+ requires the `--openssl-legacy-provider` flag already set in `npm run dev`)
+- Node.js
 - MongoDB running locally on port `27017`
 - Redis running locally on port `6379`
 
