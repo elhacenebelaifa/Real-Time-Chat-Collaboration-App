@@ -1,28 +1,35 @@
+# ─── Stage 1: Build ───────────────────────────────────────────────────────────
 FROM node:14-alpine AS builder
 
 WORKDIR /app
 
+# Install all dependencies
 COPY package*.json ./
 RUN npm ci
 
+# Build Next.js application
 COPY . .
+ENV NODE_OPTIONS=--openssl-legacy-provider
 RUN npm run build
 
-# ---
-
+# ─── Stage 2: Runner ──────────────────────────────────────────────────────────
 FROM node:14-alpine AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV NODE_OPTIONS=--openssl-legacy-provider
 
+# Install production dependencies only
 COPY package*.json ./
 RUN npm ci --omit=dev
 
+# Copy built output from builder
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY . .
 
+# Ensure uploads directory exists
 RUN mkdir -p uploads
 
 EXPOSE 3000

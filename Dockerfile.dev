@@ -2,10 +2,15 @@ FROM node:14-alpine
 
 WORKDIR /app
 
+# Install dependencies
 COPY package*.json ./
 RUN npm install
 
+# Copy source (overridden by volume mount at runtime)
 COPY . .
+
+# Required for Next.js 10 with newer OpenSSL
+ENV NODE_OPTIONS=--openssl-legacy-provider
 
 EXPOSE 3000
 
