@@ -4,9 +4,9 @@
   "description": "Real-Time Chat + Collaboration App with Express, Socket.IO, and Next.js",
   "main": "server.js",
   "scripts": {
-    "dev": "NODE_OPTIONS=--openssl-legacy-provider nodemon server.js",
-    "build": "NODE_OPTIONS=--openssl-legacy-provider next build",
-    "start": "NODE_OPTIONS=--openssl-legacy-provider NODE_ENV=production node server.js",
+    "dev": "nodemon server.js",
+    "build": "next build",
+    "start": "node server.js",
     "lint": "eslint . --ext .js,.jsx"
   },
   "keywords": [
