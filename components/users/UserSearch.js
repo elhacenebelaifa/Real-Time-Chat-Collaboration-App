@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { api } from '../../lib/api';
+import Avatar from '../shared/Avatar';
+import Icon from '../shared/Icon';
 import styles from '../../styles/Chat.module.css';
 
 export default function UserSearch({ onStartDM }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
-  const [searching, setSearching] = useState(false);
 
   const handleSearch = async (value) => {
     setQuery(value);
@@ -13,14 +14,11 @@ export default function UserSearch({ onStartDM }) {
       setResults([]);
       return;
     }
-    setSearching(true);
     try {
       const data = await api.get(`/users/search?q=${encodeURIComponent(value)}`);
       setResults(data.users || []);
     } catch {
       setResults([]);
-    } finally {
-      setSearching(false);
     }
   };
 
@@ -31,14 +29,18 @@ export default function UserSearch({ onStartDM }) {
   };
 
   return (
-    <div className={styles.searchBox}>
-      <input
-        className={styles.searchInput}
-        type="text"
-        placeholder="Search users to chat..."
-        value={query}
-        onChange={(e) => handleSearch(e.target.value)}
-      />
+    <div className={styles.userSearchBox}>
+      <div className={styles.searchBox}>
+        <Icon name="search" color="#64748b" />
+        <input
+          className={styles.searchInput}
+          type="text"
+          placeholder="Search conversations, messages…"
+          value={query}
+          onChange={(e) => handleSearch(e.target.value)}
+        />
+        <kbd className={`${styles.kbd} ${styles.mono}`}>⌘K</kbd>
+      </div>
       {results.length > 0 && (
         <div className={styles.searchResults}>
           {results.map((user) => (
@@ -47,9 +49,9 @@ export default function UserSearch({ onStartDM }) {
               className={styles.searchResultItem}
               onClick={() => handleSelect(user._id)}
             >
-              <div className={styles.onlineDot} />
-              <span>{user.displayName || user.username}</span>
-              <span style={{ color: '#666', marginLeft: 'auto', fontSize: '0.75rem' }}>
+              <Avatar user={user} size={24} showDot online={user.online} />
+              <span style={{ fontWeight: 600 }}>{user.displayName || user.username}</span>
+              <span style={{ color: '#64748b', marginLeft: 'auto', fontSize: 11 }}>
                 @{user.username}
               </span>
             </div>
