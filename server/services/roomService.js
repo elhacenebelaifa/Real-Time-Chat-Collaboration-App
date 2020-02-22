@@ -10,7 +10,8 @@ const roomService = {
       admins: [creatorId],
     });
     await room.save();
-    return room.populate('members', 'username displayName avatar status').execPopulate();
+    return room.populate('members', 'username displayName avatar status')
+      .populate({ path: 'pinnedMessage', populate: { path: 'sender', select: 'username displayName avatar' } }).execPopulate();
   },
 
   async findOrCreateDM(userId1, userId2) {
@@ -18,12 +19,14 @@ const roomService = {
     let room = await Room.findOne({
       type: 'dm',
       members: { $all: members, $size: 2 },
-    }).populate('members', 'username displayName avatar status');
+    }).populate('members', 'username displayName avatar status')
+      .populate({ path: 'pinnedMessage', populate: { path: 'sender', select: 'username displayName avatar' } });
 
     if (!room) {
       room = new Room({ type: 'dm', members });
       await room.save();
-      room = await room.populate('members', 'username displayName avatar status').execPopulate();
+      room = await room.populate('members', 'username displayName avatar status')
+      .populate({ path: 'pinnedMessage', populate: { path: 'sender', select: 'username displayName avatar' } }).execPopulate();
     }
 
     return room;
@@ -32,12 +35,14 @@ const roomService = {
   async getUserRooms(userId) {
     return Room.find({ members: userId })
       .populate('members', 'username displayName avatar status')
+      .populate({ path: 'pinnedMessage', populate: { path: 'sender', select: 'username displayName avatar' } })
       .sort({ 'lastMessage.timestamp': -1, updatedAt: -1 });
   },
 
   async getRoom(roomId) {
     return Room.findById(roomId)
-      .populate('members', 'username displayName avatar status');
+      .populate('members', 'username displayName avatar status')
+      .populate({ path: 'pinnedMessage', populate: { path: 'sender', select: 'username displayName avatar' } });
   },
 
   async joinRoom(roomId, userId) {
@@ -45,7 +50,8 @@ const roomService = {
       roomId,
       { $addToSet: { members: userId } },
       { new: true }
-    ).populate('members', 'username displayName avatar status');
+    ).populate('members', 'username displayName avatar status')
+      .populate({ path: 'pinnedMessage', populate: { path: 'sender', select: 'username displayName avatar' } });
   },
 
   async leaveRoom(roomId, userId) {

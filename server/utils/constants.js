@@ -8,5 +8,11 @@ module.exports = {
     MEMBER_JOINED: 'member:joined',
     MEMBER_LEFT: 'member:left',
     FILE_UPLOADED: 'file:uploaded',
+    REACTION_UPDATED: 'reaction:updated',
+    MESSAGE_PINNED: 'message:pinned',
+    MESSAGE_EDITED: 'message:edited',
+    MESSAGE_DELETED: 'message:deleted',
+    THREAD_UPDATED: 'thread:updated',
+    MENTION_CREATED: 'mention:created',
   },
 };

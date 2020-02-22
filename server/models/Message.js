@@ -47,10 +47,44 @@ const messageSchema = new mongoose.Schema(
             type: String,
             enum: ["sent", "delivered", "read"],
             default: "sent"
-        }
+        },
+        reactions: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {}
+        },
+        threadParent: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Message",
+            default: null,
+            index: true
+        },
+        threadCount: {
+            type: Number,
+            default: 0
+        },
+        threadLatest: {
+            type: Date,
+            default: null
+        },
+        edited: {
+            type: Boolean,
+            default: false
+        },
+        editedAt: Date,
+        deleted: {
+            type: Boolean,
+            default: false
+        },
+        mentions: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User"
+            }
+        ]
     },
     {
-        timestamps: true
+        timestamps: true,
+        minimize: false
     }
 );
 

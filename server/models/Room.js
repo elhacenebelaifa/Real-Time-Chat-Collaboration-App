@@ -29,6 +29,11 @@ const roomSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     timestamp: Date,
   },
+  pinnedMessage: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Message',
+    default: null,
+  },
 }, {
   timestamps: true,
 });
