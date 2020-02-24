@@ -44,6 +44,8 @@ function initSocket(server) {
   io.on('connection', (socket) => {
     console.log(`> Socket connected: ${socket.username} (${socket.userId})`);
 
+    socket.join(`user:${socket.userId}`);
+
     chatHandler(io, socket);
     presenceHandler(io, socket);
     roomHandler(io, socket);

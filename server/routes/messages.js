@@ -16,4 +16,18 @@ router.get('/:roomId', auth, async (req, res, next) => {
   }
 });
 
+// GET /api/messages/:roomId/thread/:parentId
+router.get('/:roomId/thread/:parentId', auth, async (req, res, next) => {
+  try {
+    const { before, limit } = req.query;
+    const messages = await messageService.getThread(req.params.parentId, {
+      before,
+      limit: parseInt(limit, 10) || 50,
+    });
+    res.json({ messages });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
