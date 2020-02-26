@@ -4,11 +4,17 @@ import Head from 'next/head';
 import { useAuth } from '../../hooks/useAuth';
 import { useSocket } from '../../hooks/useSocket';
 import { api } from '../../lib/api';
+import NavRail from '../../components/layout/NavRail';
 import RoomList from '../../components/rooms/RoomList';
 import UserSearch from '../../components/users/UserSearch';
 import CreateRoomModal from '../../components/rooms/CreateRoomModal';
 import MessageList from '../../components/chat/MessageList';
 import MessageInput from '../../components/chat/MessageInput';
+import TypingIndicator from '../../components/chat/TypingIndicator';
+import ChatHeader from '../../components/chat/ChatHeader';
+import PinnedBanner from '../../components/chat/PinnedBanner';
+import DetailsPane from '../../components/chat/DetailsPane';
+import Icon from '../../components/shared/Icon';
 import styles from '../../styles/Chat.module.css';
 
 export default function ChatRoom() {
@@ -22,17 +28,13 @@ export default function ChatRoom() {
   const [messages, setMessages] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const typingTimeoutRef = useRef(null);
   const prevRoomRef = useRef(null);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/login');
-    }
+    if (!loading && !user) router.replace('/login');
   }, [user, loading, router]);
 
-  // Fetch rooms
   const fetchRooms = useCallback(async () => {
     try {
       const data = await api.get('/rooms');
@@ -46,7 +48,6 @@ export default function ChatRoom() {
     if (user) fetchRooms();
   }, [user, fetchRooms]);
 
-  // Fetch active room details and messages
   useEffect(() => {
     if (!roomId || !user) return;
 
@@ -59,16 +60,13 @@ export default function ChatRoom() {
       .catch((err) => console.error('Failed to fetch messages:', err));
   }, [roomId, user]);
 
-  // Socket.IO: join/leave rooms and listen for messages
   useEffect(() => {
     if (!socket || !roomId) return;
 
-    // Leave previous room
     if (prevRoomRef.current && prevRoomRef.current !== roomId) {
       socket.emit('room:leave', { roomId: prevRoomRef.current });
     }
 
-    // Join new room
     socket.emit('room:join', { roomId });
     prevRoomRef.current = roomId;
 
@@ -79,7 +77,6 @@ export default function ChatRoom() {
           return [...prev, message];
         });
       }
-      // Update room list last message
       setRooms((prev) =>
         prev.map((r) =>
           r._id === message.roomId
@@ -102,16 +99,52 @@ export default function ChatRoom() {
       });
     };
 
+    const handleReaction = ({ messageId, reactions }) => {
+      setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, reactions } : m)));
+    };
+
+    const handlePinned = ({ roomId: rid, pinnedMessage }) => {
+      if (rid !== roomId) return;
+      setActiveRoom((prev) => (prev ? { ...prev, pinnedMessage } : prev));
+    };
+
+    const handleEdited = ({ messageId, content, editedAt, mentions }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, content, editedAt, mentions, edited: true } : m))
+      );
+    };
+
+    const handleDeleted = ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, deleted: true, content: '', fileAttachment: null } : m))
+      );
+    };
+
+    const handleThreadCount = ({ parentId, threadCount, threadLatest }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === parentId ? { ...m, threadCount, threadLatest } : m))
+      );
+    };
+
     socket.on('chat:message', handleMessage);
     socket.on('typing:update', handleTyping);
+    socket.on('chat:reaction', handleReaction);
+    socket.on('chat:pinned', handlePinned);
+    socket.on('chat:edited', handleEdited);
+    socket.on('chat:deleted', handleDeleted);
+    socket.on('chat:thread-count', handleThreadCount);
 
     return () => {
       socket.off('chat:message', handleMessage);
       socket.off('typing:update', handleTyping);
+      socket.off('chat:reaction', handleReaction);
+      socket.off('chat:pinned', handlePinned);
+      socket.off('chat:edited', handleEdited);
+      socket.off('chat:deleted', handleDeleted);
+      socket.off('chat:thread-count', handleThreadCount);
     };
   }, [socket, roomId, user]);
 
-  // Clear typing users when changing rooms
   useEffect(() => {
     setTypingUsers([]);
   }, [roomId]);
@@ -131,14 +164,10 @@ export default function ChatRoom() {
     router.push(`/chat/${data.room._id}`);
   };
 
-  const handleSelectRoom = (id) => {
-    setSidebarOpen(false);
-    router.push(`/chat/${id}`);
-  };
+  const handleSelectRoom = (id) => router.push(`/chat/${id}`);
 
   const handleSendMessage = (content, type = 'text', fileAttachment = null) => {
     if (!socket || !roomId) return;
-
     socket.emit('chat:send', {
       roomId,
       content,
@@ -147,8 +176,6 @@ export default function ChatRoom() {
       iv: '',
       fileAttachment,
     });
-
-    // Stop typing when sending
     socket.emit('typing:stop', { roomId });
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
@@ -156,14 +183,34 @@ export default function ChatRoom() {
     }
   };
 
+  const handleReact = (messageId, emoji) => {
+    if (!socket) return;
+    socket.emit('message:react', { messageId, emoji });
+  };
+
+  const handlePin = (messageId) => {
+    if (!socket || !roomId) return;
+    socket.emit('message:pin', { roomId, messageId });
+  };
+
+  const handleEdit = (messageId) => {
+    if (!socket) return;
+    const current = messages.find((m) => m._id === messageId);
+    const next = typeof window !== 'undefined' ? window.prompt('Edit message', current?.content || '') : null;
+    if (next == null) return;
+    socket.emit('message:edit', { messageId, content: next });
+  };
+
+  const handleDelete = (messageId) => {
+    if (!socket) return;
+    if (typeof window !== 'undefined' && !window.confirm('Delete this message?')) return;
+    socket.emit('message:delete', { messageId });
+  };
+
   const handleTyping = () => {
     if (!socket || !roomId) return;
-
     socket.emit('typing:start', { roomId });
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       socket.emit('typing:stop', { roomId });
       typingTimeoutRef.current = null;
@@ -171,97 +218,79 @@ export default function ChatRoom() {
   };
 
   if (loading || !user) {
-    return <div className={styles.loadingScreen}>Loading...</div>;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        Loading…
+      </div>
+    );
   }
 
   const isDM = activeRoom?.type === 'dm';
-  const otherUser = isDM
-    ? activeRoom.members.find((m) => m._id !== user._id)
-    : null;
+  const otherUser = isDM ? activeRoom.members.find((m) => m._id !== user._id) : null;
   const roomDisplayName = isDM
     ? (otherUser?.displayName || otherUser?.username || 'Unknown')
     : (activeRoom?.name || 'Chat');
 
+  const composerPlaceholder = activeRoom
+    ? `Message ${isDM ? (otherUser?.displayName?.split(' ')[0] || otherUser?.username || '') : `#${activeRoom.name}`}…`
+    : 'Message…';
+
   return (
     <div className={styles.appShell}>
-      <Head>
-        <title>{roomDisplayName} - Real-Time Chat</title>
-      </Head>
+      <Head><title>{roomDisplayName}</title></Head>
+      {!connected && <div className={styles.reconnecting}>Reconnecting…</div>}
 
-      {!connected && <div className={styles.reconnecting}>Reconnecting...</div>}
+      <NavRail user={user} onLogout={logout} />
 
-      {/* Sidebar overlay for mobile */}
-      <div
-        className={`${styles.sidebarOverlay} ${sidebarOpen ? styles.sidebarOverlayVisible : ''}`}
-        onClick={() => setSidebarOpen(false)}
-      />
-
-      {/* Sidebar */}
-      <div className={`${styles.sidebar} ${sidebarOpen ? styles.sidebarOpen : ''}`}>
-        <div className={styles.sidebarHeader}>
-          <h2>Chats</h2>
-          <div className={styles.sidebarActions}>
-            <button className={styles.iconButton} onClick={() => setShowCreateModal(true)} title="New Group" aria-label="Create new group chat">
-              +
+      <div className={styles.convoList}>
+        <div className={styles.convoListHeader}>
+          <div className={styles.convoListTop}>
+            <div className={styles.convoListTitle}>Messages</div>
+            <button
+              className={styles.iconButton}
+              onClick={() => setShowCreateModal(true)}
+              title="New group"
+              type="button"
+            >
+              <Icon name="compose" />
             </button>
           </div>
         </div>
-
-        <div className={styles.userInfo}>
-          <div className={styles.onlineDot} />
-          <strong>{user.displayName || user.username}</strong>
-        </div>
-
         <UserSearch onStartDM={handleStartDM} />
-
-        <div className={styles.sectionLabel}>Conversations</div>
         <RoomList
           rooms={rooms}
           activeRoomId={roomId}
           currentUserId={user._id}
           onSelect={handleSelectRoom}
         />
-
-        <button className={styles.logoutButton} onClick={logout}>
-          Sign Out
-        </button>
       </div>
 
-      {/* Main Panel */}
-      <div className={styles.mainPanel}>
-        <div className={styles.chatHeader}>
-          <button
-            className={styles.hamburgerButton}
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open sidebar"
-          >
-            ☰
-          </button>
-          <div className={styles.chatHeaderInfo}>
-            <h3>{roomDisplayName}</h3>
-            {!isDM && activeRoom && (
-              <span>{activeRoom.members.length} members</span>
-            )}
-          </div>
-        </div>
-
-        <MessageList messages={messages} currentUserId={user._id} />
-
-        <div className={styles.typingIndicator}>
-          {typingUsers.length > 0 && (
-            <span>
-              {typingUsers.map((u) => u.username).join(', ')}{' '}
-              {typingUsers.length === 1 ? 'is' : 'are'} typing...
-            </span>
-          )}
-        </div>
-
+      <div className={styles.mainPane}>
+        <ChatHeader room={activeRoom} currentUserId={user._id} />
+        {activeRoom?.pinnedMessage && (
+          <PinnedBanner
+            message={activeRoom.pinnedMessage}
+            author={activeRoom.pinnedMessage.sender?.displayName || activeRoom.pinnedMessage.sender?.username}
+          />
+        )}
+        <MessageList
+          messages={messages}
+          currentUserId={user._id}
+          onReact={handleReact}
+          onPin={handlePin}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+        <TypingIndicator typingUsers={typingUsers} />
         <MessageInput
           onSend={handleSendMessage}
           onTyping={handleTyping}
           roomId={roomId}
+          placeholder={composerPlaceholder}
         />
       </div>
+
+      <DetailsPane room={activeRoom} currentUserId={user._id} />
 
       {showCreateModal && (
         <CreateRoomModal
