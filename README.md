@@ -8,8 +8,16 @@ A full-stack real-time chat application built with Express, Socket.IO, and Next.
 - **Group chat** — create named rooms and invite members
 - **Private chat** — one-to-one DM rooms (deduplicated)
 - **File sharing** — upload images (rendered inline) and documents (download link)
+- **Reactions** — one emoji per user per message, toggled in real time
+- **Message pinning** — pin a message to a room; banner + details-pane entry stay in sync
+- **Threaded replies** — messages can have a `threadParent`; parent rows show a thread-count pill
+- **Edit & delete** — sender-only, with `(edited)` marker and soft-delete tombstones
+- **@Mentions** — `@username` is parsed on send/edit, stored on the message, and delivered via a direct `chat:mention` socket event
+- **Markdown-lite rendering** — `**bold**`, `*italic*`, `` `code` ``, triple-backtick blocks, and mention chips
+- **Composer toolbar** — attach, `@`, inline emoji picker, bold / italic / code formatters
 - **Typing indicators** — see when others are composing a message
 - **Online/offline presence** — live status dots and last-seen timestamps
+- **Split-screen auth** — branded login/register with a live password-strength meter
 - **Event-driven architecture** — internal EventEmitter bus decouples socket handlers from side effects
 - **Redis Pub/Sub** — cross-instance event broadcast for horizontal scaling
 - **Basic E2E encryption** — ECDH key exchange + AES-GCM message encryption via the Web Crypto API; private keys never leave the browser
@@ -79,14 +87,14 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │   │   ├── auth.js              # POST /api/auth/register|login, GET /api/auth/me
 │   │   ├── users.js             # GET /api/users/search|online|:id, PUT /api/users/:id/publicKey
 │   │   ├── rooms.js             # CRUD /api/rooms, POST /api/rooms/dm
-│   │   ├── messages.js          # GET /api/messages/:roomId
+│   │   ├── messages.js          # GET /api/messages/:roomId, /api/messages/:roomId/thread/:parentId
 │   │   └── files.js             # POST /api/files/upload, GET /api/files/:id
 │   ├── middleware/
 │   │   ├── auth.js              # JWT bearer token verification
 │   │   └── errorHandler.js      # Centralized error responses
 │   ├── socket/
 │   │   ├── index.js             # Socket.IO init, JWT auth middleware, handler wiring
-│   │   ├── chatHandler.js       # chat:send, chat:read events
+│   │   ├── chatHandler.js       # chat:send, chat:read, message:react|pin|edit|delete
 │   │   ├── presenceHandler.js   # online/offline, typing:start|stop events
 │   │   └── roomHandler.js       # room:join, room:leave events
 │   ├── services/                # Business logic
@@ -117,11 +125,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │       └── [roomId].js          # Active chat view
 │
 ├── components/
-│   ├── layout/                  # AppShell, Sidebar, Header
-│   ├── chat/                    # MessageList, MessageItem, MessageInput, TypingIndicator, FilePreview
-│   ├── rooms/                   # RoomList, RoomItem, CreateRoomModal, RoomMembers
-│   ├── users/                   # UserAvatar, UserSearch, OnlineUsersList
-│   └── shared/                  # Modal, Button, LoadingSpinner
+│   ├── layout/                  # NavRail (dark 64px rail with brand mark + nav buttons)
+│   ├── chat/                    # MessageList, MessageItem, MessageInput, TypingIndicator,
+│   │                            # ChatHeader, PinnedBanner, DetailsPane, DayDivider,
+│   │                            # MessageActions, ReactionsRow
+│   ├── rooms/                   # RoomList (with All/Unread/Groups/DMs tabs), RoomItem, CreateRoomModal
+│   ├── users/                   # UserAvatar, UserSearch
+│   └── shared/                  # Avatar (tone-hashed initials), Icon (inline SVG set), AuthShell
 │
 ├── context/
 │   ├── AuthContext.js           # JWT storage, login/logout/register helpers
@@ -137,6 +147,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 └── lib/
     ├── api.js                   # Fetch wrapper (attaches Authorization header)
     ├── crypto.js                # Web Crypto API helpers (ECDH, AES-GCM, IndexedDB)
+    ├── format.js                # Avatar tones, fmtTime/Relative/Day, groupByDay, renderMessageBody
     └── constants.js             # Shared socket event name constants
 ```
 
@@ -174,7 +185,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/api/messages/:roomId` | Yes | Paginated message history (`?before=<ISO>&limit=50`) |
+| GET | `/api/messages/:roomId` | Yes | Paginated main-feed history (`?before=<ISO>&limit=50`); excludes thread children and deleted messages |
+| GET | `/api/messages/:roomId/thread/:parentId` | Yes | Paginated thread replies for a parent message |
 
 ### Files
 
@@ -189,8 +201,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 
 | Event | Payload | Description |
 |---|---|---|
-| `chat:send` | `{ roomId, content, type, encrypted, iv, fileAttachment? }` | Send a message |
+| `chat:send` | `{ roomId, content, type, encrypted, iv, fileAttachment?, threadParent? }` | Send a message (pass `threadParent` for a thread reply) |
 | `chat:read` | `{ roomId, messageId }` | Mark a message as read |
+| `message:react` | `{ messageId, emoji }` | Toggle an emoji reaction (one per user per message) |
+| `message:pin` | `{ roomId, messageId }` | Pin a message (or unpin if `messageId` matches the current pin) |
+| `message:edit` | `{ messageId, content }` | Edit own text message |
+| `message:delete` | `{ messageId }` | Soft-delete own message |
 | `room:join` | `{ roomId }` | Join a Socket.IO room |
 | `room:leave` | `{ roomId }` | Leave a Socket.IO room |
 | `typing:start` | `{ roomId }` | Signal that the user started typing |
@@ -203,6 +219,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 | `chat:message` | Full message object | New message broadcast to a room |
 | `chat:delivered` | `{ messageId, roomId, userId }` | Delivery confirmation |
 | `chat:read` | `{ messageId, roomId, userId }` | Read receipt |
+| `chat:reaction` | `{ messageId, reactions }` | Reaction map updated |
+| `chat:pinned` | `{ roomId, pinnedMessage }` | Room pin changed (populated message or `null`) |
+| `chat:edited` | `{ messageId, content, editedAt, mentions }` | Message edited |
+| `chat:deleted` | `{ messageId }` | Message soft-deleted |
+| `chat:thread-count` | `{ parentId, threadCount, threadLatest }` | Thread reply count updated |
+| `chat:mention` | `{ roomId, messageId, from }` | Delivered to mentioned users (joined to `user:<id>` room) |
 | `typing:update` | `{ roomId, userId, username, isTyping }` | Typing state change |
 | `presence:online` | `{ userId, username }` | A user connected |
 | `presence:offline` | `{ userId, username, lastSeen }` | A user disconnected |
