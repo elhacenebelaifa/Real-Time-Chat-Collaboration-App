@@ -4,10 +4,42 @@ import Icon from '../shared/Icon';
 import MessageActions from './MessageActions';
 import ReactionsRow from './ReactionsRow';
 import { fmtTime, renderMessageBody, fmtRelative } from '../../lib/format';
+import useAuthImage from '../../hooks/useAuthImage';
 import styles from '../../styles/Chat.module.css';
 
 function isImageFile(mimeType) {
   return mimeType && mimeType.startsWith('image/');
+}
+
+function AuthImage({ url, alt, className }) {
+  const { blobUrl, error } = useAuthImage(url);
+  if (error) return <div className={className}>Failed to load image</div>;
+  if (!blobUrl) return <div className={className} aria-busy="true" />;
+  return <img src={blobUrl} alt={alt} className={className} />;
+}
+
+function AuthFileLink({ url, fileName, size, className, iconClassName, nameClassName, sizeClassName }) {
+  const { blobUrl } = useAuthImage(url);
+  return (
+    <a
+      href={blobUrl || '#'}
+      target="_blank"
+      rel="noopener noreferrer"
+      download={fileName}
+      className={className}
+      onClick={(e) => {
+        if (!blobUrl) e.preventDefault();
+      }}
+    >
+      <div className={iconClassName}>
+        <Icon name="file" />
+      </div>
+      <div>
+        <div className={nameClassName}>{fileName}</div>
+        <div className={sizeClassName}>{size || ''}</div>
+      </div>
+    </a>
+  );
 }
 
 export default function MessageItem({ message, currentUserId, onReact, onReply, onPin, onEdit, onDelete }) {
@@ -51,22 +83,17 @@ export default function MessageItem({ message, currentUserId, onReact, onReply, 
         {message.type === 'file' && file && (
           <div className={styles.msgAttachment}>
             {isImageFile(file.mimeType) ? (
-              <img src={file.url} alt={file.fileName} className={styles.msgImage} />
+              <AuthImage url={file.url} alt={file.fileName} className={styles.msgImage} />
             ) : (
-              <a
-                href={file.url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <AuthFileLink
+                url={file.url}
+                fileName={file.fileName}
+                size={file.size}
                 className={styles.fileAttachChip}
-              >
-                <div className={styles.fileAttachIcon}>
-                  <Icon name="file" />
-                </div>
-                <div>
-                  <div className={styles.fileAttachName}>{file.fileName}</div>
-                  <div className={styles.fileAttachSize}>{file.size || ''}</div>
-                </div>
-              </a>
+                iconClassName={styles.fileAttachIcon}
+                nameClassName={styles.fileAttachName}
+                sizeClassName={styles.fileAttachSize}
+              />
             )}
           </div>
         )}
