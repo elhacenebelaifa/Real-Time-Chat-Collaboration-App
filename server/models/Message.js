@@ -1,5 +1,17 @@
 const mongoose = require("mongoose");
 
+const messageVariantSchema = new mongoose.Schema(
+    {
+        kind: String,
+        label: String,
+        mimeType: String,
+        width: Number,
+        height: Number,
+        url: String
+    },
+    { _id: false }
+);
+
 const messageSchema = new mongoose.Schema(
     {
         roomId: {
@@ -35,7 +47,8 @@ const messageSchema = new mongoose.Schema(
             fileName: String,
             fileSize: Number,
             mimeType: String,
-            url: String
+            url: String,
+            variants: { type: [messageVariantSchema], default: undefined }
         },
         readBy: [
             {

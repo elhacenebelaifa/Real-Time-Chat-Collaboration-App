@@ -7,7 +7,9 @@ A full-stack real-time chat application built with Express, Socket.IO, and Next.
 - **Real-time messaging** via WebSockets (Socket.IO)
 - **Group chat** — create named rooms and invite members
 - **Private chat** — one-to-one DM rooms (deduplicated)
-- **File sharing** — upload images (rendered inline) and documents (download link)
+- **File sharing** — upload images (rendered inline) and documents (download link); attachments are fetched with the auth token and rendered from blob URLs
+- **Media compression** — uploaded images are transcoded to multiple WebP widths (320/640/1280/1920) via Sharp; videos are transcoded to 480p/720p H.264 + a poster frame via ffmpeg
+- **Light / dark theme** — system-preference aware, user-toggleable, persisted in `localStorage`
 - **Reactions** — one emoji per user per message, toggled in real time
 - **Message pinning** — pin a message to a room; banner + details-pane entry stay in sync
 - **Threaded replies** — messages can have a `threadParent`; parent rows show a thread-count pill
@@ -33,6 +35,8 @@ A full-stack real-time chat application built with Express, Socket.IO, and Next.
 | Database | MongoDB + Mongoose | 5.10.x |
 | Cache / Pub-Sub | Redis | 3.x |
 | File uploads | Multer | 1.4.x |
+| Image processing | Sharp | 0.32.x |
+| Video processing | fluent-ffmpeg + ffmpeg-static | 2.1.x / 5.3.x |
 | Authentication | JWT + bcryptjs | 8.x / 2.4.x |
 
 ## Prerequisites
@@ -102,6 +106,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │   │   ├── roomService.js
 │   │   ├── presenceService.js   # Redis SET-based online tracking
 │   │   ├── fileService.js
+│   │   ├── mediaCompressor.js   # Sharp (image) + ffmpeg (video) variant generation
 │   │   └── encryptionService.js # Server-side key distribution metadata
 │   ├── events/
 │   │   ├── eventBus.js          # Singleton Node.js EventEmitter
@@ -131,11 +136,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │   │                            # MessageActions, ReactionsRow
 │   ├── rooms/                   # RoomList (with All/Unread/Groups/DMs tabs), RoomItem, CreateRoomModal
 │   ├── users/                   # UserAvatar, UserSearch
-│   └── shared/                  # Avatar (tone-hashed initials), Icon (inline SVG set), AuthShell
+│   └── shared/                  # Avatar (tone-hashed initials), Icon, AuthShell, ThemeToggle
 │
 ├── context/
 │   ├── AuthContext.js           # JWT storage, login/logout/register helpers
-│   └── SocketContext.js         # Socket.IO client lifecycle, tied to auth state
+│   ├── SocketContext.js         # Socket.IO client lifecycle, tied to auth state
+│   └── ThemeContext.js          # Light/dark theme provider (localStorage + system preference)
 │
 ├── hooks/
 │   ├── useAuth.js
@@ -147,7 +153,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 └── lib/
     ├── api.js                   # Fetch wrapper (attaches Authorization header)
     ├── crypto.js                # Web Crypto API helpers (ECDH, AES-GCM, IndexedDB)
-    ├── format.js                # Avatar tones, fmtTime/Relative/Day, groupByDay, renderMessageBody
+    ├── format.js                # fmtTime/Relative/Day, groupByDay, renderMessageBody
+    ├── avatarColor.js           # Deterministic tone hashing for user avatars
     └── constants.js             # Shared socket event name constants
 ```
 
@@ -192,8 +199,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/api/files/upload` | Yes | Upload a file (`multipart/form-data`, field `file` + `roomId`) |
-| GET | `/api/files/:id` | Yes | Download a file by ID |
+| POST | `/api/files/upload` | Yes | Upload a file (`multipart/form-data`, field `file` + `roomId`); response includes generated `variants[]` |
+| GET | `/api/files/:id` | Yes | Download a file by ID; pass `?variant=<label>` (e.g. `w640`, `low`, `poster`) to fetch a transcoded variant |
 
 ## Socket.IO Events
 

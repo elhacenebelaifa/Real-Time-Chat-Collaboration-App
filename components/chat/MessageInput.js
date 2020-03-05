@@ -62,6 +62,7 @@ export default function MessageInput({ onSend, onTyping, roomId, disabled, place
           fileSize: uploadResult.size,
           mimeType: uploadResult.mimeType,
           url: uploadResult.url,
+          variants: uploadResult.variants || [],
         });
       } catch (err) {
         console.error('File upload failed:', err);
