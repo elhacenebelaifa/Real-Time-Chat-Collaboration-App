@@ -2,97 +2,10 @@ import { useState } from 'react';
 import Avatar from '../shared/Avatar';
 import Icon from '../shared/Icon';
 import MessageActions from './MessageActions';
+import MessageAttachment from './MessageAttachment';
 import ReactionsRow from './ReactionsRow';
 import { fmtTime, renderMessageBody, fmtRelative } from '../../lib/format';
-import useAuthImage from '../../hooks/useAuthImage';
 import styles from '../../styles/Chat.module.css';
-
-function isImageFile(mimeType) {
-    return mimeType && mimeType.startsWith('image/');
-}
-
-function isVideoFile(mimeType) {
-    return mimeType && mimeType.startsWith('video/');
-}
-
-function withToken(url) {
-    if (!url || typeof window === 'undefined') return url;
-    const token = localStorage.getItem('token');
-    if (!token) return url;
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}token=${encodeURIComponent(token)}`;
-}
-
-function variantUrl(file, label) {
-    const v = (file.variants || []).find((x) => x.label === label);
-    return v ? withToken(v.url) : null;
-}
-
-function AuthImage({ url, alt, className }) {
-    const { blobUrl, error } = useAuthImage(url);
-    if (error) return <div className={className}>Failed to load image</div>;
-    if (!blobUrl) return <div className={className} aria-busy="true" />;
-    return <img src={blobUrl} alt={alt} className={className} />;
-}
-
-function ResponsiveImage({ file, className }) {
-    const imageVariants = (file.variants || []).filter((v) => v.kind === 'image' && v.width);
-    if (!imageVariants.length) {
-        return <AuthImage url={file.url} alt={file.fileName} className={className} />;
-    }
-    const sorted = [...imageVariants].sort((a, b) => a.width - b.width);
-    const srcSet = sorted.map((v) => `${withToken(v.url)} ${v.width}w`).join(', ');
-    const display = sorted.find((v) => v.label === 'w1280') || sorted[sorted.length - 1];
-    return (
-        <img
-            src={withToken(display.url)}
-            srcSet={srcSet}
-            sizes="(max-width: 600px) 90vw, 600px"
-            alt={file.fileName}
-            className={className}
-        />
-    );
-}
-
-function VideoAttachment({ file, className }) {
-    const poster = variantUrl(file, 'poster');
-    const high = variantUrl(file, 'high');
-    const low = variantUrl(file, 'low');
-    const src = high || low || withToken(file.url);
-    return (
-        <video
-            controls
-            preload="metadata"
-            poster={poster || undefined}
-            src={src}
-            className={className}
-        />
-    );
-}
-
-function AuthFileLink({ url, fileName, size, className, iconClassName, nameClassName, sizeClassName }) {
-    const { blobUrl } = useAuthImage(url);
-    return (
-        <a
-            href={blobUrl || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            download={fileName}
-            className={className}
-            onClick={(e) => {
-                if (!blobUrl) e.preventDefault();
-            }}
-        >
-            <div className={iconClassName}>
-                <Icon name="file" />
-            </div>
-            <div>
-                <div className={nameClassName}>{fileName}</div>
-                <div className={sizeClassName}>{size || ''}</div>
-            </div>
-        </a>
-    );
-}
 
 export default function MessageItem({ message, currentUserId, onReact, onReply, onPin, onEdit, onDelete }) {
     const [hover, setHover] = useState(false);
@@ -132,25 +45,7 @@ export default function MessageItem({ message, currentUserId, onReact, onReply, 
                     <div className={styles.msgText}>{renderMessageBody(message.content)}</div>
                 )}
 
-                {message.type === 'file' && file && (
-                    <div className={styles.msgAttachment}>
-                        {isImageFile(file.mimeType) ? (
-                            <ResponsiveImage file={file} className={styles.msgImage} />
-                        ) : isVideoFile(file.mimeType) ? (
-                            <VideoAttachment file={file} className={styles.msgImage} />
-                        ) : (
-                            <AuthFileLink
-                                url={file.url}
-                                fileName={file.fileName}
-                                size={file.size}
-                                className={styles.fileAttachChip}
-                                iconClassName={styles.fileAttachIcon}
-                                nameClassName={styles.fileAttachName}
-                                sizeClassName={styles.fileAttachSize}
-                            />
-                        )}
-                    </div>
-                )}
+                {message.type === 'file' && file && <MessageAttachment file={file} />}
 
                 <ReactionsRow
                     reactions={message.reactions}
