@@ -1,5 +1,4 @@
 import Icon from '../shared/Icon';
-import useAuthImage from '../../hooks/useAuthImage';
 import styles from '../../styles/Chat.module.css';
 
 function isImageFile(mimeType) {
@@ -23,17 +22,10 @@ function variantUrl(file, label) {
     return v ? withToken(v.url) : null;
 }
 
-function AuthImage({ url, alt, className }) {
-    const { blobUrl, error } = useAuthImage(url);
-    if (error) return <div className={className}>Failed to load image</div>;
-    if (!blobUrl) return <div className={className} aria-busy="true" />;
-    return <img src={blobUrl} alt={alt} className={className} />;
-}
-
 function ResponsiveImage({ file, className }) {
     const imageVariants = (file.variants || []).filter((v) => v.kind === 'image' && v.width);
     if (!imageVariants.length) {
-        return <AuthImage url={file.url} alt={file.fileName} className={className} />;
+        return <img src={withToken(file.url)} alt={file.fileName} className={className} />;
     }
     const sorted = [...imageVariants].sort((a, b) => a.width - b.width);
     const srcSet = sorted.map((v) => `${withToken(v.url)} ${v.width}w`).join(', ');
@@ -65,18 +57,14 @@ function VideoAttachment({ file, className }) {
     );
 }
 
-function AuthFileLink({ file }) {
-    const { blobUrl } = useAuthImage(file.url);
+function FileLink({ file }) {
     return (
         <a
-            href={blobUrl || '#'}
+            href={withToken(file.url)}
             target="_blank"
             rel="noopener noreferrer"
             download={file.fileName}
             className={styles.fileAttachChip}
-            onClick={(e) => {
-                if (!blobUrl) e.preventDefault();
-            }}
         >
             <div className={styles.fileAttachIcon}>
                 <Icon name="file" />
@@ -97,7 +85,7 @@ export default function MessageAttachment({ file }) {
             ) : isVideoFile(file.mimeType) ? (
                 <VideoAttachment file={file} className={styles.msgImage} />
             ) : (
-                <AuthFileLink file={file} />
+                <FileLink file={file} />
             )}
         </div>
     );
