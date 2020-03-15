@@ -1068,3 +1068,144 @@
   font-family: inherit;
 }
 .modalConfirm:hover { background: #4338ca; }
+
+/* ───── Popup chat windows (Messenger-style) ─────
+   z-index 90 sits below modalOverlay (100) and reconnecting banner (10000) */
+.popupDock {
+  position: fixed;
+  right: 16px;
+  bottom: 0;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: 12px;
+  z-index: 90;
+  pointer-events: none;
+}
+
+.popupWindow {
+  width: 340px;
+  height: 440px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.popupWindowCollapsed {
+  height: 52px;
+}
+
+.popupHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 8px 0 12px;
+  background: #fff;
+  border-bottom: 1px solid #eef2f6;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.popupHeader:hover { background: #f8fafc; }
+
+.popupHashChip {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.popupHeaderName {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popupHeaderBtn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.popupHeaderBtn:hover { background: #f1f5f9; color: #0f172a; }
+
+.popupUnreadDot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.popupBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+/* Tighten reused chat components when rendered inside a popup */
+.popupBody .messageArea { padding: 8px 0; }
+.popupBody .composerArea { padding: 6px 10px 10px; }
+.popupBody .composerCard { border-radius: 10px; }
+.popupBody .composerToolbar { padding: 4px 4px 2px; gap: 0; }
+.popupBody .kbdHint { display: none; }
+.popupBody .composerTextarea { font-size: 13px; min-height: 36px; }
+.popupBody .typingRow { padding: 4px 10px; }
+
+.convoPopOut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms, background 120ms, color 120ms;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+.convoRow:hover .convoPopOut,
+.convoRow:focus-within .convoPopOut { opacity: 1; }
+.convoPopOut:hover { background: #e2e8f0; color: #0f172a; }
+
+@media (max-width: 768px) {
+  .popupDock { display: none; }
+}

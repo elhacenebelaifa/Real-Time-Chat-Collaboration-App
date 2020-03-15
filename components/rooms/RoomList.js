@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import RoomItem from './RoomItem';
+import { usePopupWindows } from '../../hooks/usePopupWindows';
 import styles from '../../styles/Chat.module.css';
 
 const TABS = [
@@ -11,6 +12,7 @@ const TABS = [
 
 export default function RoomList({ rooms, activeRoomId, currentUserId, onSelect }) {
   const [tab, setTab] = useState('all');
+  const { openPopup } = usePopupWindows();
 
   const filtered = (rooms || []).filter((r) => {
     if (tab === 'all') return true;
@@ -48,6 +50,7 @@ export default function RoomList({ rooms, activeRoomId, currentUserId, onSelect 
               active={room._id === activeRoomId}
               currentUserId={currentUserId}
               onClick={() => onSelect(room._id)}
+              onPopOut={openPopup}
             />
           ))
         )}

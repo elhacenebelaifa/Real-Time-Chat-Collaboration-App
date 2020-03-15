@@ -1,8 +1,10 @@
 import Avatar from '../shared/Avatar';
 import Icon from '../shared/Icon';
+import { usePopupWindows } from '../../hooks/usePopupWindows';
 import styles from '../../styles/Chat.module.css';
 
 export default function ChatHeader({ room, currentUserId }) {
+  const { openPopup } = usePopupWindows();
   if (!room) return null;
   const isDM = room.type === 'dm';
   const other = isDM ? (room.members || []).find((m) => m._id !== currentUserId) : null;
@@ -34,10 +36,15 @@ export default function ChatHeader({ room, currentUserId }) {
         </>
       )}
       <div style={{ flex: 1 }} />
-      {/* <button className={styles.headerBtn} title="Voice call"><Icon name="phone" /></button>
-      <button className={styles.headerBtn} title="Video call"><Icon name="video" /></button>
-      <button className={styles.headerBtn} title="Search"><Icon name="search" /></button>
-      <button className={styles.headerBtn} title="More"><Icon name="dots" /></button> */}
+      <button
+        type="button"
+        className={styles.headerBtn}
+        onClick={() => openPopup(room._id)}
+        title="Open in popup"
+        aria-label="Open in popup"
+      >
+        <Icon name="popOut" />
+      </button>
     </div>
   );
 }

@@ -1,10 +1,27 @@
 const eventBus = require('../eventBus');
 const { events } = require('../../utils/constants');
+const Room = require('../../models/Room');
 
 function registerMessageEvents(io) {
-  eventBus.on(events.MESSAGE_CREATED, (data) => {
+  eventBus.on(events.MESSAGE_CREATED, async (data) => {
     const { message } = data;
-    io.to(message.roomId.toString()).emit('chat:message', message);
+    const roomId = message.roomId.toString();
+    io.to(roomId).emit('chat:message', message);
+
+    // Fan out a lightweight notification to every member's user socket so
+    // clients that have not joined the room (e.g. sitting on /chat with no
+    // active conversation) still learn about new messages — drives popup
+    // auto-open and sidebar preview updates.
+    try {
+      const room = await Room.findById(roomId).select('members').lean();
+      if (room && Array.isArray(room.members)) {
+        room.members.forEach((memberId) => {
+          io.to(`user:${memberId.toString()}`).emit('chat:notify', message);
+        });
+      }
+    } catch (err) {
+      console.error('chat:notify fan-out failed:', err);
+    }
   });
 
   eventBus.on(events.MESSAGE_DELIVERED, (data) => {

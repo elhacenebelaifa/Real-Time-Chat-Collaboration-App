@@ -7,6 +7,7 @@ A full-stack real-time chat application built with Express, Socket.IO, and Next.
 - **Real-time messaging** via WebSockets (Socket.IO)
 - **Group chat** — create named rooms and invite members
 - **Private chat** — one-to-one DM rooms (deduplicated)
+- **Floating chat windows** — Messenger-style popup windows dock to the bottom-right and persist across page navigation; multiple conversations stay open at once (cap of 4, FIFO eviction), each with its own collapse/close state, an unread badge while collapsed, and `localStorage` persistence keyed per user. Open via the pop-out icon on any room row or in the chat header. Incoming messages auto-open a popup for any conversation that is not already on screen.
 - **File sharing** — upload images (rendered inline) and documents (download link); attachments are fetched with the auth token and rendered from blob URLs
 - **Media compression** — uploaded images are transcoded to multiple WebP widths (320/640/1280/1920) via Sharp; videos are transcoded to 480p/720p H.264 + a poster frame via ffmpeg
 - **Light / dark theme** — system-preference aware, user-toggleable, persisted in `localStorage`
@@ -120,33 +121,37 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │       └── logger.js
 │
 ├── pages/                       # Next.js Pages Router
-│   ├── _app.js                  # AuthProvider + SocketProvider
+│   ├── _app.js                  # AuthProvider + SocketProvider + PopupWindowsProvider; mounts PopupAutoOpener + PopupDock
 │   ├── _document.js
 │   ├── index.js                 # Redirects to /chat or /login
 │   ├── login.js
 │   ├── register.js
 │   └── chat/
 │       ├── index.js             # Room list + empty state
-│       └── [roomId].js          # Active chat view
+│       └── [roomId].js          # Active chat view (consumes useRoomChat)
 │
 ├── components/
 │   ├── layout/                  # NavRail (dark 64px rail with brand mark + nav buttons)
 │   ├── chat/                    # MessageList, MessageItem, MessageInput, TypingIndicator,
-│   │                            # ChatHeader, PinnedBanner, DetailsPane, DayDivider,
-│   │                            # MessageActions, ReactionsRow
-│   ├── rooms/                   # RoomList (with All/Unread/Groups/DMs tabs), RoomItem, CreateRoomModal
+│   │                            # ChatHeader (with pop-out button), PinnedBanner, DetailsPane,
+│   │                            # DayDivider, MessageActions, ReactionsRow
+│   ├── rooms/                   # RoomList (with All/Unread/Groups/DMs tabs), RoomItem (with pop-out button), CreateRoomModal
+│   ├── popup/                   # PopupDock, PopupWindow, PopupHeader, PopupAutoOpener — floating chat windows
 │   ├── users/                   # UserAvatar, UserSearch
 │   └── shared/                  # Avatar (tone-hashed initials), Icon, AuthShell, ThemeToggle
 │
 ├── context/
 │   ├── AuthContext.js           # JWT storage, login/logout/register helpers
 │   ├── SocketContext.js         # Socket.IO client lifecycle, tied to auth state
-│   └── ThemeContext.js          # Light/dark theme provider (localStorage + system preference)
+│   ├── ThemeContext.js          # Light/dark theme provider (localStorage + system preference)
+│   └── PopupWindowsContext.js   # Open floating windows: state, cap (4) + FIFO, per-user localStorage
 │
 ├── hooks/
 │   ├── useAuth.js
 │   ├── useSocket.js
 │   ├── useMessages.js           # Paginated message fetching + live appending
+│   ├── useRoomChat.js           # Per-room socket subscriptions + send/react/pin/edit/delete/typing actions; shared by the chat page and each popup window
+│   ├── usePopupWindows.js       # Consumer hook for PopupWindowsContext
 │   ├── usePresence.js           # Online user set from socket events
 │   └── useEncryption.js         # Key pair init, shared key derivation, encrypt/decrypt
 │
@@ -223,7 +228,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 
 | Event | Payload | Description |
 |---|---|---|
-| `chat:message` | Full message object | New message broadcast to a room |
+| `chat:message` | Full message object | New message broadcast to clients joined to the conversation socket room |
+| `chat:notify` | Full message object | Same payload as `chat:message`, fanned out to every member's `user:<id>` socket regardless of whether they have joined the conversation room — drives sidebar preview updates and floating-popup auto-open |
 | `chat:delivered` | `{ messageId, roomId, userId }` | Delivery confirmation |
 | `chat:read` | `{ messageId, roomId, userId }` | Read receipt |
 | `chat:reaction` | `{ messageId, reactions }` | Reaction map updated |

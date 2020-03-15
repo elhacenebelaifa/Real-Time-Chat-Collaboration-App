@@ -1,8 +1,9 @@
 import Avatar from '../shared/Avatar';
+import Icon from '../shared/Icon';
 import { fmtRelative } from '../../lib/format';
 import styles from '../../styles/Chat.module.css';
 
-export default function RoomItem({ room, active, currentUserId, onClick }) {
+export default function RoomItem({ room, active, currentUserId, onClick, onPopOut }) {
   const isDM = room.type === 'dm';
   const otherUser = isDM ? (room.members || []).find((m) => m._id !== currentUserId) : null;
   const displayName = isDM
@@ -16,6 +17,12 @@ export default function RoomItem({ room, active, currentUserId, onClick }) {
 
   const senderName = last?.senderName;
   const unread = room.unreadCount || 0;
+
+  const handlePopOut = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (onPopOut) onPopOut(room._id);
+  };
 
   return (
     <button
@@ -48,6 +55,19 @@ export default function RoomItem({ room, active, currentUserId, onClick }) {
           {unread > 0 && <span className={styles.unreadPill}>{unread}</span>}
         </div>
       </div>
+      {onPopOut && (
+        <span
+          role="button"
+          tabIndex={0}
+          className={styles.convoPopOut}
+          onClick={handlePopOut}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handlePopOut(e); }}
+          title="Open in popup"
+          aria-label="Open in popup"
+        >
+          <Icon name="popOut" size={13} color="#64748b" />
+        </span>
+      )}
     </button>
   );
 }

@@ -15,7 +15,7 @@ export default function Avatar({
   const resolvedId = id || user?._id || user?.id || resolvedName;
   const resolvedInitials = initials || user?.initials || initialsFor(resolvedName);
   const resolvedTone = tone || user?.tone || toneFor(resolvedId);
-  const resolvedOnline = typeof online === 'boolean' ? online : !!user?.online;
+  const resolvedOnline = typeof online === 'boolean' ? online : user?.status === 'online';
   const t = AVATAR_TONES[resolvedTone] || AVATAR_TONES.indigo;
   const fs = Math.round(size * 0.42);
 

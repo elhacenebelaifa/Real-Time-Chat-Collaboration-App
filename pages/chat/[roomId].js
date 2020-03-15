@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuth } from '../../hooks/useAuth';
 import { useSocket } from '../../hooks/useSocket';
+import { useRoomChat } from '../../hooks/useRoomChat';
 import { api } from '../../lib/api';
 import NavRail from '../../components/layout/NavRail';
 import RoomList from '../../components/rooms/RoomList';
@@ -24,12 +25,19 @@ export default function ChatRoom() {
   const { roomId } = router.query;
 
   const [rooms, setRooms] = useState([]);
-  const [activeRoom, setActiveRoom] = useState(null);
-  const [messages, setMessages] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [typingUsers, setTypingUsers] = useState([]);
-  const typingTimeoutRef = useRef(null);
-  const prevRoomRef = useRef(null);
+
+  const {
+    activeRoom,
+    messages,
+    typingUsers,
+    send,
+    react,
+    pin,
+    edit,
+    deleteMessage,
+    startTyping,
+  } = useRoomChat(roomId);
 
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
@@ -49,105 +57,27 @@ export default function ChatRoom() {
   }, [user, fetchRooms]);
 
   useEffect(() => {
-    if (!roomId || !user) return;
-
-    api.get(`/rooms/${roomId}`)
-      .then((data) => setActiveRoom(data.room))
-      .catch((err) => console.error('Failed to fetch room:', err));
-
-    api.get(`/messages/${roomId}`)
-      .then((data) => setMessages(data.messages))
-      .catch((err) => console.error('Failed to fetch messages:', err));
-  }, [roomId, user]);
-
-  useEffect(() => {
-    if (!socket || !roomId) return;
-
-    if (prevRoomRef.current && prevRoomRef.current !== roomId) {
-      socket.emit('room:leave', { roomId: prevRoomRef.current });
-    }
-
-    socket.emit('room:join', { roomId });
-    prevRoomRef.current = roomId;
-
-    const handleMessage = (message) => {
-      if (message.roomId === roomId) {
-        setMessages((prev) => {
-          if (prev.find((m) => m._id === message._id)) return prev;
-          return [...prev, message];
-        });
-      }
+    if (!socket) return;
+    const handleAnyMessage = (message) => {
+      if (!message?.roomId) return;
       setRooms((prev) =>
         prev.map((r) =>
           r._id === message.roomId
-            ? { ...r, lastMessage: { content: message.content, sender: message.sender._id, timestamp: message.createdAt } }
+            ? {
+                ...r,
+                lastMessage: {
+                  content: message.content,
+                  sender: typeof message.sender === 'object' ? message.sender?._id : message.sender,
+                  timestamp: message.createdAt,
+                },
+              }
             : r
         )
       );
     };
-
-    const handleTyping = (data) => {
-      if (data.roomId !== roomId) return;
-      if (data.userId === user._id) return;
-
-      setTypingUsers((prev) => {
-        if (data.isTyping) {
-          if (prev.find((u) => u.userId === data.userId)) return prev;
-          return [...prev, { userId: data.userId, username: data.username }];
-        }
-        return prev.filter((u) => u.userId !== data.userId);
-      });
-    };
-
-    const handleReaction = ({ messageId, reactions }) => {
-      setMessages((prev) => prev.map((m) => (m._id === messageId ? { ...m, reactions } : m)));
-    };
-
-    const handlePinned = ({ roomId: rid, pinnedMessage }) => {
-      if (rid !== roomId) return;
-      setActiveRoom((prev) => (prev ? { ...prev, pinnedMessage } : prev));
-    };
-
-    const handleEdited = ({ messageId, content, editedAt, mentions }) => {
-      setMessages((prev) =>
-        prev.map((m) => (m._id === messageId ? { ...m, content, editedAt, mentions, edited: true } : m))
-      );
-    };
-
-    const handleDeleted = ({ messageId }) => {
-      setMessages((prev) =>
-        prev.map((m) => (m._id === messageId ? { ...m, deleted: true, content: '', fileAttachment: null } : m))
-      );
-    };
-
-    const handleThreadCount = ({ parentId, threadCount, threadLatest }) => {
-      setMessages((prev) =>
-        prev.map((m) => (m._id === parentId ? { ...m, threadCount, threadLatest } : m))
-      );
-    };
-
-    socket.on('chat:message', handleMessage);
-    socket.on('typing:update', handleTyping);
-    socket.on('chat:reaction', handleReaction);
-    socket.on('chat:pinned', handlePinned);
-    socket.on('chat:edited', handleEdited);
-    socket.on('chat:deleted', handleDeleted);
-    socket.on('chat:thread-count', handleThreadCount);
-
-    return () => {
-      socket.off('chat:message', handleMessage);
-      socket.off('typing:update', handleTyping);
-      socket.off('chat:reaction', handleReaction);
-      socket.off('chat:pinned', handlePinned);
-      socket.off('chat:edited', handleEdited);
-      socket.off('chat:deleted', handleDeleted);
-      socket.off('chat:thread-count', handleThreadCount);
-    };
-  }, [socket, roomId, user]);
-
-  useEffect(() => {
-    setTypingUsers([]);
-  }, [roomId]);
+    socket.on('chat:notify', handleAnyMessage);
+    return () => socket.off('chat:notify', handleAnyMessage);
+  }, [socket]);
 
   const handleCreateRoom = async (name) => {
     const data = await api.post('/rooms', { name });
@@ -165,57 +95,6 @@ export default function ChatRoom() {
   };
 
   const handleSelectRoom = (id) => router.push(`/chat/${id}`);
-
-  const handleSendMessage = (content, type = 'text', fileAttachment = null) => {
-    if (!socket || !roomId) return;
-    socket.emit('chat:send', {
-      roomId,
-      content,
-      type,
-      encrypted: false,
-      iv: '',
-      fileAttachment,
-    });
-    socket.emit('typing:stop', { roomId });
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = null;
-    }
-  };
-
-  const handleReact = (messageId, emoji) => {
-    if (!socket) return;
-    socket.emit('message:react', { messageId, emoji });
-  };
-
-  const handlePin = (messageId) => {
-    if (!socket || !roomId) return;
-    socket.emit('message:pin', { roomId, messageId });
-  };
-
-  const handleEdit = (messageId) => {
-    if (!socket) return;
-    const current = messages.find((m) => m._id === messageId);
-    const next = typeof window !== 'undefined' ? window.prompt('Edit message', current?.content || '') : null;
-    if (next == null) return;
-    socket.emit('message:edit', { messageId, content: next });
-  };
-
-  const handleDelete = (messageId) => {
-    if (!socket) return;
-    if (typeof window !== 'undefined' && !window.confirm('Delete this message?')) return;
-    socket.emit('message:delete', { messageId });
-  };
-
-  const handleTyping = () => {
-    if (!socket || !roomId) return;
-    socket.emit('typing:start', { roomId });
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      socket.emit('typing:stop', { roomId });
-      typingTimeoutRef.current = null;
-    }, 2000);
-  };
 
   if (loading || !user) {
     return (
@@ -276,15 +155,15 @@ export default function ChatRoom() {
         <MessageList
           messages={messages}
           currentUserId={user._id}
-          onReact={handleReact}
-          onPin={handlePin}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
+          onReact={react}
+          onPin={pin}
+          onEdit={edit}
+          onDelete={deleteMessage}
         />
         <TypingIndicator typingUsers={typingUsers} />
         <MessageInput
-          onSend={handleSendMessage}
-          onTyping={handleTyping}
+          onSend={send}
+          onTyping={startTyping}
           roomId={roomId}
           placeholder={composerPlaceholder}
         />

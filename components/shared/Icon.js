@@ -30,6 +30,7 @@ export default function Icon({ name, size = 16, color = 'currentColor', strokeWi
     play:        <path d="M4 3l9 5-9 5z" {...p}/>,
     file:        <path d="M4 1.5h5l3 3V14a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V2a.5.5 0 0 1 .5-.5zM9 1.5V5h3" {...p}/>,
     link:        <path d="M7 9l2-2M6 4.5l1.5-1.5a2.5 2.5 0 0 1 3.5 3.5L9.5 8M9 11.5l-1.5 1.5a2.5 2.5 0 0 1-3.5-3.5L6 8" {...p}/>,
+    popOut:      <><path d="M9 3h4v4" {...p}/><path d="M13 3l-5 5" {...p}/><path d="M11 9v3.5a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-7a.5.5 0 0 1 .5-.5H7" {...p}/></>,
   };
   return (
     <svg viewBox="0 0 16 16" width={size} height={size} style={{ display: 'block', flexShrink: 0 }}>
