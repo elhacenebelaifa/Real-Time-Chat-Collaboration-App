@@ -9,17 +9,23 @@ export function useRoomChat(roomId) {
   const { socket } = useSocket();
   const { messages, loading, hasMore, loadMore, addMessage, setMessages } = useMessages(roomId);
   const [activeRoom, setActiveRoom] = useState(null);
+  const [notificationLevel, setNotificationLevelState] = useState('all');
   const [typingUsers, setTypingUsers] = useState([]);
   const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (!roomId || !user) {
       setActiveRoom(null);
+      setNotificationLevelState('all');
       return;
     }
     let cancelled = false;
     api.get(`/rooms/${roomId}`)
-      .then((data) => { if (!cancelled) setActiveRoom(data.room); })
+      .then((data) => {
+        if (cancelled) return;
+        setActiveRoom(data.room);
+        setNotificationLevelState(data.notificationLevel || 'all');
+      })
       .catch((err) => console.error('Failed to fetch room:', err));
     return () => { cancelled = true; };
   }, [roomId, user]);
@@ -96,7 +102,7 @@ export function useRoomChat(roomId) {
     };
   }, [socket, roomId, user, addMessage, setMessages]);
 
-  const send = useCallback((content, type = 'text', fileAttachment = null) => {
+  const send = useCallback((content, type = 'text', fileAttachment = null, threadParent = null) => {
     if (!socket || !roomId) return;
     socket.emit('chat:send', {
       roomId,
@@ -105,6 +111,7 @@ export function useRoomChat(roomId) {
       encrypted: false,
       iv: '',
       fileAttachment,
+      threadParent,
     });
     socket.emit('typing:stop', { roomId });
     if (typingTimeoutRef.current) {
@@ -147,6 +154,18 @@ export function useRoomChat(roomId) {
     }, 2000);
   }, [socket, roomId]);
 
+  const setNotificationLevel = useCallback(async (level) => {
+    if (!roomId) return;
+    const prev = notificationLevel;
+    setNotificationLevelState(level);
+    try {
+      await api.put(`/rooms/${roomId}/notifications`, { level });
+    } catch (err) {
+      console.error('Failed to update notification level:', err);
+      setNotificationLevelState(prev);
+    }
+  }, [roomId, notificationLevel]);
+
   return {
     activeRoom,
     messages,
@@ -160,5 +179,7 @@ export function useRoomChat(roomId) {
     edit,
     deleteMessage,
     startTyping,
+    notificationLevel,
+    setNotificationLevel,
   };
 }

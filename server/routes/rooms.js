@@ -1,6 +1,16 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
 const roomService = require('../services/roomService');
+const User = require('../models/User');
+
+const VALID_LEVELS = ['all', 'mentions', 'none'];
+
+function levelFor(user, roomId) {
+  const overrides = user.notificationOverrides;
+  if (!overrides) return 'all';
+  if (overrides instanceof Map) return overrides.get(roomId.toString()) || 'all';
+  return overrides[roomId.toString()] || 'all';
+}
 
 // POST /api/rooms - create group room
 router.post('/', auth, async (req, res, next) => {
@@ -33,7 +43,28 @@ router.get('/:id', auth, async (req, res, next) => {
     if (!room) {
       return res.status(404).json({ error: { message: 'Room not found' } });
     }
-    res.json({ room });
+    res.json({ room, notificationLevel: levelFor(req.user, room._id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/rooms/:id/notifications - update per-room notification level
+router.put('/:id/notifications', auth, async (req, res, next) => {
+  try {
+    const { level } = req.body || {};
+    if (!VALID_LEVELS.includes(level)) {
+      return res.status(400).json({ error: { message: 'level must be one of all|mentions|none' } });
+    }
+
+    const key = `notificationOverrides.${req.params.id}`;
+    if (level === 'all') {
+      await User.updateOne({ _id: req.user._id }, { $unset: { [key]: '' } });
+    } else {
+      await User.updateOne({ _id: req.user._id }, { $set: { [key]: level } });
+    }
+
+    res.json({ level });
   } catch (err) {
     next(err);
   }

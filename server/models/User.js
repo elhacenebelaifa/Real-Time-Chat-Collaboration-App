@@ -43,6 +43,20 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  pushSubscriptions: [{
+    endpoint: { type: String, required: true },
+    keys: {
+      p256dh: { type: String, required: true },
+      auth: { type: String, required: true },
+    },
+    userAgent: String,
+    createdAt: { type: Date, default: Date.now },
+  }],
+  notificationOverrides: {
+    type: Map,
+    of: { type: String, enum: ['all', 'mentions', 'none'] },
+    default: () => new Map(),
+  },
 }, {
   timestamps: true,
 });
@@ -60,6 +74,7 @@ userSchema.methods.comparePassword = async function (password) {
 userSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.passwordHash;
+  delete obj.pushSubscriptions;
   return obj;
 };
 

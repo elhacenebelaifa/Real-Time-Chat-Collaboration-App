@@ -15,6 +15,7 @@ import TypingIndicator from '../../components/chat/TypingIndicator';
 import ChatHeader from '../../components/chat/ChatHeader';
 import PinnedBanner from '../../components/chat/PinnedBanner';
 import DetailsPane from '../../components/chat/DetailsPane';
+import ThreadPanel from '../../components/chat/ThreadPanel';
 import Icon from '../../components/shared/Icon';
 import styles from '../../styles/Chat.module.css';
 
@@ -26,6 +27,7 @@ export default function ChatRoom() {
 
   const [rooms, setRooms] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [openThreadId, setOpenThreadId] = useState(null);
 
   const {
     activeRoom,
@@ -37,6 +39,8 @@ export default function ChatRoom() {
     edit,
     deleteMessage,
     startTyping,
+    notificationLevel,
+    setNotificationLevel,
   } = useRoomChat(roomId);
 
   useEffect(() => {
@@ -95,6 +99,12 @@ export default function ChatRoom() {
   };
 
   const handleSelectRoom = (id) => router.push(`/chat/${id}`);
+
+  useEffect(() => { setOpenThreadId(null); }, [roomId]);
+
+  const openThreadParent = openThreadId
+    ? messages.find((m) => m._id === openThreadId)
+    : null;
 
   if (loading || !user) {
     return (
@@ -156,6 +166,7 @@ export default function ChatRoom() {
           messages={messages}
           currentUserId={user._id}
           onReact={react}
+          onReply={setOpenThreadId}
           onPin={pin}
           onEdit={edit}
           onDelete={deleteMessage}
@@ -169,7 +180,21 @@ export default function ChatRoom() {
         />
       </div>
 
-      <DetailsPane room={activeRoom} currentUserId={user._id} />
+      {openThreadParent ? (
+        <ThreadPanel
+          roomId={roomId}
+          parent={openThreadParent}
+          currentUserId={user._id}
+          onClose={() => setOpenThreadId(null)}
+        />
+      ) : (
+        <DetailsPane
+        room={activeRoom}
+        currentUserId={user._id}
+        notificationLevel={notificationLevel}
+        onSetNotificationLevel={setNotificationLevel}
+      />
+      )}
 
       {showCreateModal && (
         <CreateRoomModal

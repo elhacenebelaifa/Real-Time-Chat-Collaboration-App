@@ -13,7 +13,8 @@ A full-stack real-time chat application built with Express, Socket.IO, and Next.
 - **Light / dark theme** — system-preference aware, user-toggleable, persisted in `localStorage`
 - **Reactions** — one emoji per user per message, toggled in real time
 - **Message pinning** — pin a message to a room; banner + details-pane entry stay in sync
-- **Threaded replies** — messages can have a `threadParent`; parent rows show a thread-count pill
+- **Threaded replies** — messages can have a `threadParent`; parent rows show a thread-count pill, and a dedicated thread panel (or in-popup thread view) shows the parent + replies with its own composer
+- **Web push notifications** — VAPID-signed browser push via a service worker; receive notifications for new messages even when the tab is closed, with per-room levels (`all` / `mentions` / `none`) and an opt-in banner that suppresses notifications for the conversation already focused
 - **Edit & delete** — sender-only, with `(edited)` marker and soft-delete tombstones
 - **@Mentions** — `@username` is parsed on send/edit, stored on the message, and delivered via a direct `chat:mention` socket event
 - **Markdown-lite rendering** — `**bold**`, `*italic*`, `` `code` ``, triple-backtick blocks, and mention chips
@@ -38,6 +39,7 @@ A full-stack real-time chat application built with Express, Socket.IO, and Next.
 | File uploads | Multer | 1.4.x |
 | Image processing | Sharp | 0.32.x |
 | Video processing | fluent-ffmpeg + ffmpeg-static | 2.1.x / 5.3.x |
+| Web push | web-push | 3.6.x |
 | Authentication | JWT + bcryptjs | 8.x / 2.4.x |
 
 ## Prerequisites
@@ -70,7 +72,12 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection string |
 | `JWT_SECRET` | — | Secret used to sign JWT tokens — **change this in production** |
 | `UPLOAD_DIR` | `./uploads` | Directory for uploaded files |
-| `MAX_FILE_SIZE` | `10485760` | Maximum upload size in bytes (default: 10 MB) |
+| `MAX_FILE_SIZE` | `104857600` | Maximum upload size in bytes (default: 100 MB) |
+| `VAPID_PUBLIC_KEY` | — | VAPID public key for web push (generate with `npx web-push generate-vapid-keys`) |
+| `VAPID_PRIVATE_KEY` | — | VAPID private key for web push |
+| `VAPID_SUBJECT` | `mailto:admin@example.com` | `mailto:` or `https:` URL identifying the push sender |
+
+Push notifications are optional: if the VAPID keys are unset the `/api/push/*` routes return `503` and the client banner stays hidden, but everything else continues to work.
 
 ## Project Structure
 
@@ -91,9 +98,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │   ├── routes/                  # Express REST API
 │   │   ├── auth.js              # POST /api/auth/register|login, GET /api/auth/me
 │   │   ├── users.js             # GET /api/users/search|online|:id, PUT /api/users/:id/publicKey
-│   │   ├── rooms.js             # CRUD /api/rooms, POST /api/rooms/dm
+│   │   ├── rooms.js             # CRUD /api/rooms, POST /api/rooms/dm, PUT /api/rooms/:id/notifications
 │   │   ├── messages.js          # GET /api/messages/:roomId, /api/messages/:roomId/thread/:parentId
-│   │   └── files.js             # POST /api/files/upload, GET /api/files/:id
+│   │   ├── files.js             # POST /api/files/upload, GET /api/files/:id
+│   │   └── push.js              # GET /api/push/vapid-public-key, POST|DELETE /api/push/subscribe
 │   ├── middleware/
 │   │   ├── auth.js              # JWT bearer token verification
 │   │   └── errorHandler.js      # Centralized error responses
@@ -108,6 +116,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │   │   ├── presenceService.js   # Redis SET-based online tracking
 │   │   ├── fileService.js
 │   │   ├── mediaCompressor.js   # Sharp (image) + ffmpeg (video) variant generation
+│   │   ├── pushService.js       # web-push fan-out, per-room level filtering, dead-subscription pruning
 │   │   └── encryptionService.js # Server-side key distribution metadata
 │   ├── events/
 │   │   ├── eventBus.js          # Singleton Node.js EventEmitter
@@ -120,8 +129,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │       ├── constants.js         # Event name constants
 │       └── logger.js
 │
+├── public/
+│   └── sw.js                    # Service worker — handles push + notificationclick, suppresses for the focused room
+│
 ├── pages/                       # Next.js Pages Router
-│   ├── _app.js                  # AuthProvider + SocketProvider + PopupWindowsProvider; mounts PopupAutoOpener + PopupDock
+│   ├── _app.js                  # AuthProvider + SocketProvider + PopupWindowsProvider; mounts PopupAutoOpener, PopupDock, EnableNotificationsBanner
 │   ├── _document.js
 │   ├── index.js                 # Redirects to /chat or /login
 │   ├── login.js
@@ -133,12 +145,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 ├── components/
 │   ├── layout/                  # NavRail (dark 64px rail with brand mark + nav buttons)
 │   ├── chat/                    # MessageList, MessageItem, MessageInput, TypingIndicator,
-│   │                            # ChatHeader (with pop-out button), PinnedBanner, DetailsPane,
-│   │                            # DayDivider, MessageActions, ReactionsRow
+│   │                            # ChatHeader (with pop-out button), PinnedBanner, DetailsPane
+│   │                            # (with per-room notification level picker), DayDivider,
+│   │                            # MessageActions, ReactionsRow, ThreadPanel
 │   ├── rooms/                   # RoomList (with All/Unread/Groups/DMs tabs), RoomItem (with pop-out button), CreateRoomModal
 │   ├── popup/                   # PopupDock, PopupWindow, PopupHeader, PopupAutoOpener — floating chat windows
 │   ├── users/                   # UserAvatar, UserSearch
-│   └── shared/                  # Avatar (tone-hashed initials), Icon, AuthShell, ThemeToggle
+│   └── shared/                  # Avatar (tone-hashed initials), Icon, AuthShell, ThemeToggle, EnableNotificationsBanner
 │
 ├── context/
 │   ├── AuthContext.js           # JWT storage, login/logout/register helpers
@@ -151,13 +164,16 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 │   ├── useSocket.js
 │   ├── useMessages.js           # Paginated message fetching + live appending
 │   ├── useRoomChat.js           # Per-room socket subscriptions + send/react/pin/edit/delete/typing actions; shared by the chat page and each popup window
+│   ├── useThread.js             # Loads thread replies + subscribes to chat:thread-message
 │   ├── usePopupWindows.js       # Consumer hook for PopupWindowsContext
 │   ├── usePresence.js           # Online user set from socket events
+│   ├── usePushNotifications.js  # Service worker registration + VAPID subscribe/unsubscribe lifecycle
 │   └── useEncryption.js         # Key pair init, shared key derivation, encrypt/decrypt
 │
 └── lib/
     ├── api.js                   # Fetch wrapper (attaches Authorization header)
     ├── crypto.js                # Web Crypto API helpers (ECDH, AES-GCM, IndexedDB)
+    ├── push.js                  # Service-worker registration + PushManager subscribe/unsubscribe
     ├── format.js                # fmtTime/Relative/Day, groupByDay, renderMessageBody
     ├── avatarColor.js           # Deterministic tone hashing for user avatars
     └── constants.js             # Shared socket event name constants
@@ -188,9 +204,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 |---|---|---|---|
 | POST | `/api/rooms` | Yes | Create a group room |
 | GET | `/api/rooms` | Yes | List the authenticated user's rooms |
-| GET | `/api/rooms/:id` | Yes | Get room details and members |
+| GET | `/api/rooms/:id` | Yes | Get room details, members, and the caller's `notificationLevel` |
 | POST | `/api/rooms/:id/join` | Yes | Join a room |
 | POST | `/api/rooms/:id/leave` | Yes | Leave a room |
+| PUT | `/api/rooms/:id/notifications` | Yes | Set this user's notification level for the room (`all` \| `mentions` \| `none`) |
 | POST | `/api/rooms/dm` | Yes | Find or create a DM with another user |
 
 ### Messages
@@ -206,6 +223,14 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 |---|---|---|---|
 | POST | `/api/files/upload` | Yes | Upload a file (`multipart/form-data`, field `file` + `roomId`); response includes generated `variants[]` |
 | GET | `/api/files/:id` | Yes | Download a file by ID; pass `?variant=<label>` (e.g. `w640`, `low`, `poster`) to fetch a transcoded variant |
+
+### Push
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/api/push/vapid-public-key` | Yes | Returns `{ key }` — the server's VAPID public key (or `503` if push is not configured) |
+| POST | `/api/push/subscribe` | Yes | Register or refresh a `PushSubscription` for the current user (`{ subscription, userAgent }`) |
+| DELETE | `/api/push/subscribe` | Yes | Remove a subscription by `{ endpoint }` |
 
 ## Socket.IO Events
 
@@ -229,6 +254,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. Register tw
 | Event | Payload | Description |
 |---|---|---|
 | `chat:message` | Full message object | New message broadcast to clients joined to the conversation socket room |
+| `chat:thread-message` | Full message object | New thread reply (a message with `threadParent`); broadcast to the room socket so the thread panel can append it without disturbing the main feed |
 | `chat:notify` | Full message object | Same payload as `chat:message`, fanned out to every member's `user:<id>` socket regardless of whether they have joined the conversation room — drives sidebar preview updates and floating-popup auto-open |
 | `chat:delivered` | `{ messageId, roomId, userId }` | Delivery confirmation |
 | `chat:read` | `{ messageId, roomId, userId }` | Read receipt |
@@ -266,7 +292,7 @@ Browser                      Express + Socket.IO          MongoDB    Redis
 1. Client emits `chat:send` via WebSocket
 2. Server saves the message to MongoDB
 3. `chatHandler` fires `MESSAGE_CREATED` on the local event bus
-4. `messageEvents` handler calls `io.to(roomId).emit('chat:message', ...)` for local clients
+4. `messageEvents` handler calls `io.to(roomId).emit('chat:message', ...)` for local clients, fans `chat:notify` out to every member's `user:<id>` socket, and triggers `pushService.fanout` for offline / background members
 5. `redisEventBus` publishes the event to Redis channel `chat:events`
 6. All other server instances receive it via their Redis subscriber and re-broadcast to their local clients
 
@@ -285,6 +311,29 @@ Encryption is opt-in at the DM level (group key distribution is also scaffolded)
 5. The server stores only the ciphertext and IV — plaintext never reaches the server
 
 **Limitations:** No forward secrecy; losing your IndexedDB (e.g. clearing browser data) means losing access to encrypted message history.
+
+## Push Notifications
+
+Web push is implemented with VAPID-signed messages, the [`web-push`](https://www.npmjs.com/package/web-push) library on the server, and a small service worker (`public/sw.js`) on the client.
+
+**Setup:**
+1. Generate a key pair: `npx web-push generate-vapid-keys`
+2. Set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` in `.env`
+3. The first time a logged-in user loads the app, an opt-in banner asks for `Notification` permission; on accept, the client registers `/sw.js`, calls `pushManager.subscribe`, and stores the subscription on `User.pushSubscriptions`.
+
+**Fan-out (`server/services/pushService.js`):**
+- Triggered from `messageEvents` after every non-system, non-thread `MESSAGE_CREATED`.
+- Skips the sender; for everyone else, looks up `User.notificationOverrides[roomId]` to honour `all` / `mentions` / `none` levels (mentions-only requires the user's id to be in `message.mentions`).
+- Encrypted messages collapse to `[Encrypted]`, files to `[File]`; long text is clipped to 140 chars.
+- `404` / `410` responses prune the dead subscription from the user document.
+
+**Service worker (`public/sw.js`):**
+- On `push`, suppresses the notification if the user has the matching `/chat/<roomId>` tab focused; otherwise shows it tagged by `roomId` so subsequent messages collapse together.
+- On `notificationclick`, focuses an existing tab on that route or opens a new one.
+
+**Per-room muting:** the details pane lets a user set their notification level per room via `PUT /api/rooms/:id/notifications`, which writes to `User.notificationOverrides`.
+
+If `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` are unset, `pushService` no-ops and `/api/push/vapid-public-key` returns `503` — the rest of the app behaves identically.
 
 ## Scripts
 

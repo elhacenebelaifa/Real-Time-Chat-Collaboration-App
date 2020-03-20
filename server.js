@@ -42,6 +42,7 @@ nextApp.prepare().then(async () => {
   app.use('/api/rooms', require('./server/routes/rooms'));
   app.use('/api/messages', require('./server/routes/messages'));
   app.use('/api/files', require('./server/routes/files'));
+  app.use('/api/push', require('./server/routes/push'));
 
   // Error handler
   app.use(require('./server/middleware/errorHandler'));

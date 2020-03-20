@@ -14,7 +14,7 @@ function Section({ title, count, children }) {
   );
 }
 
-export default function DetailsPane({ room, currentUserId }) {
+export default function DetailsPane({ room, currentUserId, notificationLevel = 'all', onSetNotificationLevel }) {
   if (!room) {
     return (
       <aside className={styles.detailsPane}>
@@ -88,10 +88,18 @@ export default function DetailsPane({ room, currentUserId }) {
 
         <Section title="Notifications">
           <label className={styles.notifLabel}>
-            <input type="checkbox" defaultChecked /> All messages
+            <input
+              type="checkbox"
+              checked={notificationLevel === 'all'}
+              onChange={(e) => onSetNotificationLevel && onSetNotificationLevel(e.target.checked ? 'all' : 'none')}
+            /> All messages
           </label>
           <label className={styles.notifLabel}>
-            <input type="checkbox" /> Only @mentions
+            <input
+              type="checkbox"
+              checked={notificationLevel === 'mentions'}
+              onChange={(e) => onSetNotificationLevel && onSetNotificationLevel(e.target.checked ? 'mentions' : 'none')}
+            /> Only @mentions
           </label>
         </Section>
       </div>

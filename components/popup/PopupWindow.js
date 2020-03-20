@@ -5,6 +5,7 @@ import { usePopupWindows } from '../../hooks/usePopupWindows';
 import MessageList from '../chat/MessageList';
 import MessageInput from '../chat/MessageInput';
 import TypingIndicator from '../chat/TypingIndicator';
+import ThreadPanel from '../chat/ThreadPanel';
 import PopupHeader from './PopupHeader';
 import styles from '../../styles/Chat.module.css';
 
@@ -24,7 +25,12 @@ export default function PopupWindow({ roomId, collapsed }) {
   } = useRoomChat(roomId);
 
   const [unread, setUnread] = useState(0);
+  const [openThreadId, setOpenThreadId] = useState(null);
   const lastSeenLenRef = useRef(null);
+
+  const openThreadParent = openThreadId
+    ? messages.find((m) => m._id === openThreadId)
+    : null;
 
   useEffect(() => {
     // First time messages populate (initial fetch), establish baseline without counting.
@@ -73,23 +79,34 @@ export default function PopupWindow({ roomId, collapsed }) {
         onClose={() => closePopup(roomId)}
       />
       {!collapsed && (
-        <div className={styles.popupBody}>
-          <MessageList
-            messages={messages}
-            currentUserId={user?._id}
-            onReact={react}
-            onPin={pin}
-            onEdit={edit}
-            onDelete={deleteMessage}
-          />
-          <TypingIndicator typingUsers={typingUsers} />
-          <MessageInput
-            onSend={send}
-            onTyping={startTyping}
+        openThreadParent ? (
+          <ThreadPanel
             roomId={roomId}
-            placeholder={composerPlaceholder}
+            parent={openThreadParent}
+            currentUserId={user?._id}
+            onClose={() => setOpenThreadId(null)}
+            embedded
           />
-        </div>
+        ) : (
+          <div className={styles.popupBody}>
+            <MessageList
+              messages={messages}
+              currentUserId={user?._id}
+              onReact={react}
+              onReply={setOpenThreadId}
+              onPin={pin}
+              onEdit={edit}
+              onDelete={deleteMessage}
+            />
+            <TypingIndicator typingUsers={typingUsers} />
+            <MessageInput
+              onSend={send}
+              onTyping={startTyping}
+              roomId={roomId}
+              placeholder={composerPlaceholder}
+            />
+          </div>
+        )
       )}
     </div>
   );
