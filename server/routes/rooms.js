@@ -1,26 +1,17 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
 const roomService = require('../services/roomService');
-const User = require('../models/User');
-
-const VALID_LEVELS = ['all', 'mentions', 'none'];
-
-function levelFor(user, roomId) {
-  const overrides = user.notificationOverrides;
-  if (!overrides) return 'all';
-  if (overrides instanceof Map) return overrides.get(roomId.toString()) || 'all';
-  return overrides[roomId.toString()] || 'all';
-}
+const userService = require('../services/userService');
+const ApiResponse = require('../utils/ApiResponse');
+const ApiError = require('../utils/ApiError');
 
 // POST /api/rooms - create group room
 router.post('/', auth, async (req, res, next) => {
   try {
-    const { name, members } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: { message: 'Room name is required' } });
-    }
+    const { name, members } = req.body || {};
+    if (!name) throw ApiError.badRequest('Room name is required');
     const room = await roomService.createGroup(name, req.user._id, members || []);
-    res.status(201).json({ room });
+    return ApiResponse.created({ room }).send(res);
   } catch (err) {
     next(err);
   }
@@ -30,7 +21,7 @@ router.post('/', auth, async (req, res, next) => {
 router.get('/', auth, async (req, res, next) => {
   try {
     const rooms = await roomService.getUserRooms(req.user._id);
-    res.json({ rooms });
+    return ApiResponse.ok({ rooms }).send(res);
   } catch (err) {
     next(err);
   }
@@ -40,10 +31,9 @@ router.get('/', auth, async (req, res, next) => {
 router.get('/:id', auth, async (req, res, next) => {
   try {
     const room = await roomService.getRoom(req.params.id);
-    if (!room) {
-      return res.status(404).json({ error: { message: 'Room not found' } });
-    }
-    res.json({ room, notificationLevel: levelFor(req.user, room._id) });
+    if (!room) throw ApiError.notFound('Room not found');
+    const notificationLevel = userService.levelFor(req.user, room._id);
+    return ApiResponse.ok({ room, notificationLevel }).send(res);
   } catch (err) {
     next(err);
   }
@@ -53,18 +43,8 @@ router.get('/:id', auth, async (req, res, next) => {
 router.put('/:id/notifications', auth, async (req, res, next) => {
   try {
     const { level } = req.body || {};
-    if (!VALID_LEVELS.includes(level)) {
-      return res.status(400).json({ error: { message: 'level must be one of all|mentions|none' } });
-    }
-
-    const key = `notificationOverrides.${req.params.id}`;
-    if (level === 'all') {
-      await User.updateOne({ _id: req.user._id }, { $unset: { [key]: '' } });
-    } else {
-      await User.updateOne({ _id: req.user._id }, { $set: { [key]: level } });
-    }
-
-    res.json({ level });
+    const result = await userService.setNotificationLevel(req.user._id, req.params.id, level);
+    return ApiResponse.ok({ level: result }).send(res);
   } catch (err) {
     next(err);
   }
@@ -74,10 +54,8 @@ router.put('/:id/notifications', auth, async (req, res, next) => {
 router.post('/:id/join', auth, async (req, res, next) => {
   try {
     const room = await roomService.joinRoom(req.params.id, req.user._id);
-    if (!room) {
-      return res.status(404).json({ error: { message: 'Room not found' } });
-    }
-    res.json({ room });
+    if (!room) throw ApiError.notFound('Room not found');
+    return ApiResponse.ok({ room }).send(res);
   } catch (err) {
     next(err);
   }
@@ -87,10 +65,8 @@ router.post('/:id/join', auth, async (req, res, next) => {
 router.post('/:id/leave', auth, async (req, res, next) => {
   try {
     const room = await roomService.leaveRoom(req.params.id, req.user._id);
-    if (!room) {
-      return res.status(404).json({ error: { message: 'Room not found' } });
-    }
-    res.json({ success: true });
+    if (!room) throw ApiError.notFound('Room not found');
+    return ApiResponse.ok({ left: true }).send(res);
   } catch (err) {
     next(err);
   }
@@ -99,12 +75,10 @@ router.post('/:id/leave', auth, async (req, res, next) => {
 // POST /api/rooms/dm - find or create DM
 router.post('/dm', auth, async (req, res, next) => {
   try {
-    const { userId } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: { message: 'userId is required' } });
-    }
+    const { userId } = req.body || {};
+    if (!userId) throw ApiError.badRequest('userId is required');
     const room = await roomService.findOrCreateDM(req.user._id, userId);
-    res.json({ room });
+    return ApiResponse.ok({ room }).send(res);
   } catch (err) {
     next(err);
   }

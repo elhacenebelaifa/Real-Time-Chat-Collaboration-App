@@ -1,26 +1,12 @@
-const Room = require('../models/Room');
+const roomRepository = require('../repositories/roomRepository');
 
 const encryptionService = {
-  // Store an encrypted room key for a member
-  async addEncryptedKey(roomId, userId, encryptedKey, iv) {
-    return Room.findByIdAndUpdate(
-      roomId,
-      {
-        $push: {
-          encryptedKeys: { userId, encryptedKey, iv },
-        },
-      },
-      { new: true }
-    );
+  addEncryptedKey(roomId, userId, encryptedKey, iv) {
+    return roomRepository.setEncryptedKey(roomId, userId, encryptedKey, iv);
   },
 
-  // Get the encrypted room key for a specific member
-  async getEncryptedKey(roomId, userId) {
-    const room = await Room.findById(roomId);
-    if (!room) return null;
-    return room.encryptedKeys.find(
-      (k) => k.userId.toString() === userId.toString()
-    );
+  getEncryptedKey(roomId, userId) {
+    return roomRepository.getEncryptedKey(roomId, userId);
   },
 };
 

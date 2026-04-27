@@ -1,5 +1,5 @@
 const webpush = require('web-push');
-const User = require('../models/User');
+const userRepository = require('../repositories/userRepository');
 
 let configured = false;
 
@@ -35,10 +35,7 @@ async function sendOne(user, subscription, payload) {
     await webpush.sendNotification(subscription, JSON.stringify(payload));
   } catch (err) {
     if (err && (err.statusCode === 404 || err.statusCode === 410)) {
-      await User.updateOne(
-        { _id: user._id },
-        { $pull: { pushSubscriptions: { endpoint: subscription.endpoint } } }
-      );
+      await userRepository.removePushSubscription(user._id, subscription.endpoint);
     } else {
       console.error('web-push send failed:', err && err.statusCode, err && err.body);
     }
@@ -62,9 +59,7 @@ async function fanout(message, room) {
   const title = buildTitle(message, room);
   const url = `/chat/${roomId}`;
 
-  const users = await User.find({ _id: { $in: memberIds } })
-    .select('pushSubscriptions notificationOverrides')
-    .lean();
+  const users = await userRepository.findWithPushSubscriptionsByIds(memberIds);
 
   await Promise.all(users.map(async (user) => {
     if (!user.pushSubscriptions || !user.pushSubscriptions.length) return;

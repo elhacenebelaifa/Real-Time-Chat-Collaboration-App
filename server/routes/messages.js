@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
 const messageService = require('../services/messageService');
+const ApiResponse = require('../utils/ApiResponse');
 
 // GET /api/messages/:roomId
 router.get('/:roomId', auth, async (req, res, next) => {
@@ -10,7 +11,7 @@ router.get('/:roomId', auth, async (req, res, next) => {
       before,
       limit: parseInt(limit, 10) || 50,
     });
-    res.json({ messages });
+    return ApiResponse.ok({ messages }).send(res);
   } catch (err) {
     next(err);
   }
@@ -24,7 +25,7 @@ router.get('/:roomId/thread/:parentId', auth, async (req, res, next) => {
       before,
       limit: parseInt(limit, 10) || 50,
     });
-    res.json({ messages });
+    return ApiResponse.ok({ messages }).send(res);
   } catch (err) {
     next(err);
   }

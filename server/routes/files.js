@@ -4,6 +4,8 @@ const auth = require('../middleware/auth');
 const upload = require('../config/multer');
 const fileService = require('../services/fileService');
 const { compressImage, compressVideo } = require('../services/mediaCompressor');
+const ApiResponse = require('../utils/ApiResponse');
+const ApiError = require('../utils/ApiError');
 
 async function buildVariants(file) {
   if (file.mimetype.startsWith('image/')) {
@@ -35,9 +37,7 @@ async function buildVariants(file) {
 // POST /api/files/upload
 router.post('/upload', auth, upload.single('file'), async (req, res, next) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: { message: 'No file provided' } });
-    }
+    if (!req.file) throw ApiError.badRequest('No file provided');
 
     const { variants, compressionStatus } = await buildVariants(req.file);
 
@@ -54,7 +54,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res, next) => {
     });
 
     const baseUrl = `/api/files/${fileMeta._id}`;
-    res.status(201).json({
+    return ApiResponse.created({
       fileId: fileMeta._id,
       url: baseUrl,
       originalName: fileMeta.originalName,
@@ -70,7 +70,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res, next) => {
         height: v.height,
         url: `${baseUrl}?variant=${v.label}`,
       })),
-    });
+    }).send(res);
   } catch (err) {
     next(err);
   }
@@ -80,9 +80,7 @@ router.post('/upload', auth, upload.single('file'), async (req, res, next) => {
 router.get('/:id', auth, async (req, res, next) => {
   try {
     const file = await fileService.getById(req.params.id);
-    if (!file) {
-      return res.status(404).json({ error: { message: 'File not found' } });
-    }
+    if (!file) throw ApiError.notFound('File not found');
     const picked = fileService.pickVariant(file, req.query.variant);
     res.type(picked.mimeType);
     res.sendFile(path.resolve(picked.path));

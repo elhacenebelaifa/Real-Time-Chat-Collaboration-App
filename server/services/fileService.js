@@ -1,4 +1,4 @@
-const FileAttachment = require('../models/FileAttachment');
+const fileAttachmentRepository = require('../repositories/fileAttachmentRepository');
 
 function defaultLabelFor(mimeType) {
     if (mimeType.startsWith('image/')) return 'w1280';
@@ -7,24 +7,22 @@ function defaultLabelFor(mimeType) {
 }
 
 const fileService = {
-    async saveMetadata({ originalName, storedName, mimeType, size, path, uploadedBy, roomId, variants = [], compressionStatus = 'none' }) {
-        const file = new FileAttachment({
-            originalName,
-            storedName,
-            mimeType,
-            size,
-            path,
-            uploadedBy,
-            roomId,
-            variants,
-            compressionStatus,
+    saveMetadata(data) {
+        return fileAttachmentRepository.create({
+            originalName: data.originalName,
+            storedName: data.storedName,
+            mimeType: data.mimeType,
+            size: data.size,
+            path: data.path,
+            uploadedBy: data.uploadedBy,
+            roomId: data.roomId,
+            variants: data.variants || [],
+            compressionStatus: data.compressionStatus || 'none',
         });
-        await file.save();
-        return file;
     },
 
-    async getById(fileId) {
-        return FileAttachment.findById(fileId);
+    getById(fileId) {
+        return fileAttachmentRepository.findById(fileId);
     },
 
     pickVariant(file, requestedLabel) {

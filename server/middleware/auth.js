@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const userRepository = require('../repositories/userRepository');
+const ApiError = require('../utils/ApiError');
 
 async function auth(req, res, next) {
   try {
@@ -10,21 +11,23 @@ async function auth(req, res, next) {
     } else if (typeof req.query.token === 'string' && req.query.token) {
       token = req.query.token;
     }
-    if (!token) {
-      return res.status(401).json({ error: { message: 'Authentication required' } });
-    }
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId).select('-passwordHash');
+    if (!token) return next(ApiError.unauthorized('Authentication required'));
 
-    if (!user) {
-      return res.status(401).json({ error: { message: 'User not found' } });
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (e) {
+      return next(ApiError.unauthorized('Invalid token'));
     }
+
+    const user = await userRepository.findByIdSafe(decoded.userId);
+    if (!user) return next(ApiError.unauthorized('User not found'));
 
     req.user = user;
     req.token = token;
     next();
   } catch (err) {
-    res.status(401).json({ error: { message: 'Invalid token' } });
+    next(err);
   }
 }
 

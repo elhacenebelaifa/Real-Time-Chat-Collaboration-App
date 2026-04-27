@@ -1,6 +1,6 @@
 const eventBus = require('../eventBus');
 const { events } = require('../../utils/constants');
-const Room = require('../../models/Room');
+const roomRepository = require('../../repositories/roomRepository');
 const pushService = require('../../services/pushService');
 
 function registerMessageEvents(io) {
@@ -20,7 +20,7 @@ function registerMessageEvents(io) {
     // active conversation) still learn about new messages — drives popup
     // auto-open and sidebar preview updates.
     try {
-      const room = await Room.findById(roomId).select('members name type').lean();
+      const room = await roomRepository.findByIdLean(roomId);
       if (room && Array.isArray(room.members)) {
         room.members.forEach((memberId) => {
           io.to(`user:${memberId.toString()}`).emit('chat:notify', message);

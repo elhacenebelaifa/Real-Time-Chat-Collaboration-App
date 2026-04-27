@@ -7,7 +7,8 @@
     "dev": "nodemon server.js",
     "build": "next build",
     "start": "node server.js",
-    "lint": "eslint . --ext .js,.jsx"
+    "lint": "eslint . --ext .js,.jsx",
+    "check:layering": "node scripts/check-model-imports.js"
   },
   "keywords": [
     "chat",
